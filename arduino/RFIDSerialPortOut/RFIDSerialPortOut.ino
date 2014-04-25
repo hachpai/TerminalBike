@@ -1,78 +1,114 @@
 // digit 2 <-> 9
 // 5V <-> 
 // GND <->
-
 #include <SoftwareSerial.h>
 
-SoftwareSerial RIFDSerial = SoftwareSerial(2,3); 
-
-void setup() {
-  Serial.begin(9600);   // connect to the serial port
-  RIFDSerial.begin(9600);
+/*
+// serialReadLine ->
+char bufferSerial[200];
+char inputByte;
+int nextBufferPosition = 0;
+char* serialReadLine() {
+  if (Serial.available()) {
+    inputByte = Serial.read();
+    if(inputByte == '\n') {
+      nextBufferPosition = 0;
+      return bufferSerial;
+    }
+    else {
+      bufferSerial[nextBufferPosition] = inputByte;
+      nextBufferPosition ++;
+      return null;
+    }
+  }
 }
+// <- fin SerialReadLine
+*/
 
-void loop () {
+// serialPrintLine ->
+void serialPrintLine(String s) {
+  Serial.print(s);
+  Serial.println();
+}
+// <- fin SerialPrintLine
+
+// rFIDRead ->
+boolean rFIDRead(SoftwareSerial *RFIDSerial, byte *rFIDCode) {
   byte i = 0;
-  byte val = 0;
-  byte code[6];
+  byte readByte = 0;
+  byte tempByte = 0;
   byte checksum = 0;
-  byte bytesread = 0;
-  byte tempbyte = 0;
- 
-  if(RIFDSerial.available() > 0) {
-    if((val = RIFDSerial.read()) == 2) {                  // check for header 
+  byte bytesread = 0;  
+  if(RFIDSerial->available() > 0) {
+    if((readByte = RFIDSerial->read()) == 2) {                  // check for header 
       bytesread = 0; 
       while (bytesread < 12) {                        // read 10 digit code + 2 digit checksum
-        if( RIFDSerial.available() > 0) { 
-          val = RIFDSerial.read();
-          if((val == 0x0D)||(val == 0x0A)||(val == 0x03)||(val == 0x02)) { // if header or stop bytes before the 10 digit reading 
-            break;                                    // stop reading
+        if( RFIDSerial->available() > 0) { 
+          readByte = RFIDSerial->read();
+          if((readByte == 0x0D)||(readByte == 0x0A)||(readByte == 0x03)||(readByte == 0x02)) { // if header or stop bytes before the 10 digit reading 
+            return false;                                  // stop reading
           }
 
           // Do Ascii/Hex conversion:
-          if ((val >= '0') && (val <= '9')) {
-            val = val - '0';
-          } else if ((val >= 'A') && (val <= 'F')) {
-            val = 10 + val - 'A';
+          if ((readByte >= '0') && (readByte <= '9')) {
+            readByte = readByte - '0';
+          } else if ((readByte >= 'A') && (readByte <= 'F')) {
+            readByte = 10 + readByte - 'A';
           }
 
           // Every two hex-digits, add byte to code:
           if (bytesread & 1 == 1) {
             // make some space for this hex-digit by
             // shifting the previous hex-digit with 4 bits to the left:
-            code[bytesread >> 1] = (val | (tempbyte << 4));
+            rFIDCode[bytesread >> 1] = (readByte | (tempByte << 4));
 
-            if (bytesread >> 1 != 5) {                // If we're at the checksum byte,
-              checksum ^= code[bytesread >> 1];       // Calculate the checksum... (XOR)
+          if (bytesread >> 1 != 5) {                // If we're at the checksum byte,
+              checksum ^= rFIDCode[bytesread >> 1];       // Calculate the checksum... (XOR)
             };
           } else {
-            tempbyte = val;                           // Store the first hex digit first...
+            tempByte = readByte;                           // Store the first hex digit first...
           };
 
           bytesread++;                                // ready to read next digit
         } 
-      } 
-
-      // Output to Serial:
-
-
-      if (bytesread == 12) {                          // if 12 digit read is complete
-        if(code[5] == checksum) {
-          for (i=0; i<5; i++) {
-            if (code[i] < 16) Serial.print("0");
-            Serial.print(code[i], HEX);
-            if (i < 4) {
-              Serial.print(" ");
-            }
-          }
-        }
-        else {
-          Serial.print("Error Checksum");
-        }
-        Serial.println();
       }
 
-      bytesread = 0;
+      if (bytesread == 12) {              // if 12 digit read is complete
+        if(rFIDCode[5] == checksum) {
+          return true;
+        }
+      }
     }
+  }
+  return false;
+}
+// <- fin RFIDRead
+
+// byteArrayToString ->
+String byteArrayToString(byte *byteArray, int byteArraySize) {
+  int i;
+  String ret = "";
+  for (i=0; i<byteArraySize; i++) {
+    if(byteArray[i] < 16) ret += "0";
+    ret += String(byteArray[i], HEX);   
+    if (i < 4) ret += " ";
+  }
+  return ret;
+}
+// <- fin byteArrayToString
+
+
+// ------------------------ PGM ------------------ //
+SoftwareSerial RFIDSerial = SoftwareSerial(2,3);
+
+void setup() {
+  Serial.begin(9600);   // connect to the serial port
+  RFIDSerial.begin(9600);
+}
+
+void loop () {
+  byte rFIDCode[6];
+  if(rFIDRead(&RFIDSerial, &rFIDCode[0])) {    
+    serialPrintLine(byteArrayToString(&rFIDCode[0], 5));
   }
 }
