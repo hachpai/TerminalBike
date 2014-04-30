@@ -9,7 +9,7 @@ CONFIGURATION :
 // npm install serialport
 // serial port node : https://github.com/voodootikigod/node-serialport
 var SerialPort = require("serialport").SerialPort
-var serialPort = new SerialPort("/dev/tty.usbmodem411", {
+var serialPort = new SerialPort("/dev/tty.usbserial-AM01VB8R", {
    baudrate: 9600
 });
 
@@ -28,6 +28,7 @@ function get_user_information(rfid) {
    if (mongodb_vls_user) {
       mongo_response = mongodb_vls_user.find({ rfid: rfid});
       mongo_response.count(function(err, count) {
+		  console.log('on est la!' + count);
          if(count == 1) {
             mongo_response.next(function(err, result) {
                console.log("CODE:" + result.code);
@@ -38,6 +39,13 @@ function get_user_information(rfid) {
                });
             });
          }
+		 else {
+             serialPort.write("no_user" + "\n", function(err, results) {
+                console.log('err: ' + err);
+                console.log('results: ' + results);
+                console.log('Erreur envoyé');
+             });
+		 }
       });
    }
 }

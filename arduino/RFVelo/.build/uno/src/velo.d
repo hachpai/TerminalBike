@@ -9,4 +9,6 @@
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/Printable.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/new.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/variants/standard/pins_arduino.h \
-  lib/nrf2401/Nrf2401.h
+  lib/nrf2401/Nrf2401.h \
+  /Applications/Arduino.app/Contents/Resources/Java/libraries/SoftwareSerial/SoftwareSerial.h \
+  /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/Stream.h
