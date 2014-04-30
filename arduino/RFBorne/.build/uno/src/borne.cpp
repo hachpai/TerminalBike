@@ -68,16 +68,16 @@ void loop(void)
 void messageReceived(void)
 {
 	if(Radio.available()){
+		Serial.println("DATA RECEIVED!");
 		Radio.read();
 		if(Radio.channel == CHANNEL_BROADCAST){
 			bike_id = Radio.data[0];
 			Radio.remoteAddress = bike_id;
 		}
 		else if(Radio.channel == CHANNEL_COM){
-			Serial.println("we're here!!");
 			request_code = Radio.data[0];
 			for(int i = 0;i<6;i++){
-				client_rfid[i] = Radio.data[i];
+				client_rfid[i] = Radio.data[i+1];
 			}
 		}
 		Radio.txMode();

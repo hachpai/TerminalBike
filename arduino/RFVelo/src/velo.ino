@@ -42,6 +42,7 @@ void loop(void)
 		Radio.data[0] = BIKE_ID;
 		Radio.write(); // Send his bike ID
 		changeChannel(CHANNEL_COM);
+		delay(1000); //wait for second arduino
 		Radio.txMode(6);
 		Radio.data[0] = 42; //withdraw code
 		for(int i =0;i<6;i++){
