@@ -3,27 +3,24 @@
 // GND <->
 #include <SoftwareSerial.h>
 
-/*
 // serialReadLine ->
-char bufferSerial[200];
-char inputByte;
-int nextBufferPosition = 0;
-char* serialReadLine() {
-  if (Serial.available()) {
-    inputByte = Serial.read();
-    if(inputByte == '\n') {
-      nextBufferPosition = 0;
-      return bufferSerial;
+boolean serialReadLine(String &dest) {
+  //Renvoie la taille lue... sur un tableau de char...
+  String ret = "";
+  byte character;
+  while (Serial.available()) {
+    character = Serial.read();
+    if(character == '\n') {
+      dest = ret;
+      return true;
     }
     else {
-      bufferSerial[nextBufferPosition] = inputByte;
-      nextBufferPosition ++;
-      return null;
+      ret.concat(character);
     }
   }
+  return false;
 }
 // <- fin SerialReadLine
-*/
 
 // serialPrintLine ->
 void serialPrintLine(String s) {
@@ -100,15 +97,47 @@ String byteArrayToString(byte *byteArray, int byteArraySize) {
 
 // ------------------------ PGM ------------------ //
 SoftwareSerial RFIDSerial = SoftwareSerial(2,3);
+int led = 13;
 
 void setup() {
   Serial.begin(9600);   // connect to the serial port
   RFIDSerial.begin(9600);
+  pinMode(led, OUTPUT); 
 }
 
 void loop () {
   byte rFIDCode[6];
   if(rFIDRead(&RFIDSerial, &rFIDCode[0])) {    
     serialPrintLine(byteArrayToString(&rFIDCode[0], 5));
+    delay(100);
+    String userCode = "";
+    if(serialReadLine(userCode)) {
+      serialPrintLine(userCode);
+      if (userCode == "0111") {
+        digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
+        delay(1000);               // wait for a second
+        digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
+        delay(1000); 
+      }
+    }
+    /*
+    char inputByte;
+    while (Serial.available()) {
+      inputByte = Serial.read();
+      if(inputByte == '\n') {
+        break;
+      }
+      else {
+        userCode += inputByte;
+      }
+    }
+    serialPrintLine(userCode);
+    if (userCode == "0111") {
+      digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
+      delay(1000);               // wait for a second
+      digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
+      delay(1000); 
+    }
+    */
   }
 }

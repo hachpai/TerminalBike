@@ -31,6 +31,11 @@ function get_user_information(rfid) {
          if(count == 1) {
             mongo_response.next(function(err, result) {
                console.log("CODE:" + result.code);
+               serialPort.write(result.code + "\n", function(err, results) {
+                  console.log('err: ' + err);
+                  console.log('results: ' + results);
+                  console.log('Code envoyé');
+               });
             });
          }
       });
