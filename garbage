@@ -1,0 +1,36 @@
+/*changeChannel(CHANNEL_COM);
+//Serial.print("bike found ID:");
+//Serial.println(bike_id);
+Radio.rxMode(6);
+while(request_code != 42); //To test, the delay(500); doesnt certify the reception of datas
+/*for(int i = 0;i<6;i++){
+//Serial.print(client_rfid[i]);
+//Serial.print(" ");
+}
+serialPrintLine(byteArrayToString(&client_rfid[0],5));
+String s = "";
+for(int i = 0;i<6;i++){
+s = s+client_rfid[i];
+if(i!=5){s = s + '-';}
+}
+lcd.setCursor(0, 0);
+lcd.print(s);
+delay(100); //wait for second arduino
+String userCode = "";
+while(!serialReadLine(userCode));
+//serialPrintLine(userCode);
+if (userCode == "0111") {
+digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
+delay(1000);               // wait for a second
+digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
+delay(1000);
+}
+lcd.setCursor(0, 1);
+lcd.print(userCode);
+Radio.txMode(2);
+Radio.data[0]= 45;
+Radio.data[1]= userCode[0]; //get the code from DB
+Radio.write();
+//Serial.print("END!!");
+bike_id = 0;
+Radio.remoteAddress = 0;*/

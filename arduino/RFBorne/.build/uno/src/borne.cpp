@@ -1,30 +1,32 @@
 #include <Arduino.h>
-#include <Nrf2401.h>
+#include <LiquidCrystal.h>
+#include "RFCore.h"
 void serialPrintLine(String s);
 String byteArrayToString(byte *byteArray, int byteArraySize);
 boolean serialReadLine(String &dest);
 void setup(void);
 void loop(void);
-void messageReceived(void);
-void changeChannel(int new_channel);
+void displayInfos(String l1, String l2);
 #line 1 "src/borne.ino"
 
-//#include <Nrf2401.h>
+//#include <LiquidCrystal.h>
+//#include "RFCore.h"
 
-Nrf2401 Radio;
-volatile unsigned char request_code = 0;
-volatile unsigned char bike_id = 0;
-byte client_rfid[6];
+RFCore * rf_core;
+
+unsigned int BIKE_ID = 200;
+//byte client_rfid[6]={10,20,34,12,11,42};
+unsigned char data[6] = {0,0,0,0,0,0};
+
 // note that the "linkEstablished" variable is declared volatile
-// this prevents the compiler from optimizing it out as it is only 
+// this prevents the compiler from optimizing it out as it is only
 // modified by the interrupt handler - a function that we never directly call
 
 
 unsigned char BORNE_ID=42;
 
-unsigned char CHANNEL_BROADCAST = 0; 
-unsigned char CHANNEL_COM = 100;
-
+byte WITHDRAW_CODE=10;
+byte RETURN_CODE=20;
 
 // serialPrintLine ->
 void serialPrintLine(String s) {
@@ -39,7 +41,7 @@ String byteArrayToString(byte *byteArray, int byteArraySize) {
 	String ret = "";
 	for (i=0; i<byteArraySize; i++) {
 		if(byteArray[i] < 16) ret += "0";
-		ret += String(byteArray[i], HEX);   
+		ret += String(byteArray[i], HEX);
 		if (i < 4) ret += " ";
 	}
 	return ret;
@@ -64,83 +66,44 @@ boolean serialReadLine(String &dest) {
 }
 
 int led =13;
+LiquidCrystal lcd(12, 11, 10, 9, 8, 7);
 void setup(void)
 {
 	Serial.begin(9600);
 	pinMode(led, OUTPUT);
-	attachInterrupt(0, messageReceived, RISING);  // look for rising edges on digital pin 2
-	Radio.dataRate = 0;
-	Radio.localAddress = BORNE_ID;
-	Radio.txMode(1);
+	lcd.begin(16, 2);
+	rf_core = new RFCore(BORNE_ID, true);
 }
 
-void loop(void)
-{
-	changeChannel(CHANNEL_BROADCAST);
-	if(bike_id==0)
-	{
-		//Serial.println("BROADCASTING...");
-		Radio.txMode(1);
-		Radio.write(BORNE_ID);
-		Radio.rxMode(1);
-		delay(500);
-		
+void loop(void){
+	while(!rf_core->handShake()){
+		lcd.home();
+		lcd.print("BROADCASTING...");
 	}
-	else{
-		changeChannel(CHANNEL_COM);
-		//Serial.print("bike found ID:");
-		//Serial.println(bike_id);
-		Radio.rxMode(6);
-		while(request_code != 42); //To test, the delay(500); doesnt certify the reception of datas
-		/*for(int i = 0;i<6;i++){
-		//Serial.print(client_rfid[i]);
-		//Serial.print(" ");
-		}*/
-		serialPrintLine(byteArrayToString(&client_rfid[0],5));
-		
-		delay(100); //wait for second arduino
-		String userCode = "";
-		while(!serialReadLine(userCode));
-		//serialPrintLine(userCode);
-		if (userCode == "0111") {
-			digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
-			delay(1000);               // wait for a second
-			digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
-			delay(1000); 
-		}
-		Radio.txMode(2);
-		Radio.data[0]= 45;
-		Radio.data[1]= userCode[0]; //get the code from DB
-		Radio.write();
-		//Serial.print("END!!");
-		bike_id = 0;
-		Radio.remoteAddress = 0;
 
-	}
+	digitalWrite(led, HIGH);
+	String result = "ID received:";
+	result = result + rf_core->getRemoteID();
+	displayInfos("BIKE FOUND!",result);
+	delay(1000);//wait for data
+	Serial.print("FIRST CALL");
+	rf_core->getNextPacket(&data[0]); //get the operation code
+	result = byteArrayToString(&data[0],6);
+	displayInfos("Operation Code:",result);
+	Serial.println(result);
+	delay(1000);
+	Serial.print("SECOND CALL");
+	rf_core->getNextPacket(&data[0]); //get the RFID
+	result = byteArrayToString(&data[0],6);
+
+	displayInfos("RFID Received:",result);
+
 }
 
-	void messageReceived(void)
-	{
-		if(Radio.available()){
-			//Serial.println("DATA RECEIVED!");
-			Radio.read();
-			if(Radio.channel == CHANNEL_BROADCAST){
-				bike_id = Radio.data[0];
-				Radio.remoteAddress = bike_id;
-			}
-			else if(Radio.channel == CHANNEL_COM){
-				request_code = Radio.data[0];
-				for(int i = 0;i<6;i++){
-					client_rfid[i] = Radio.data[i+1];
-				}
-			}
-			Radio.txMode();
-
-		}
-	}
-	void changeChannel(int new_channel){
-		if(Radio.channel != new_channel){
-			Radio.channel = new_channel;
-			delay(250);
-		}
-	}
+void displayInfos(String l1, String l2){
+	lcd.clear();
+	lcd.home();
+	lcd.print(l1);
+	lcd.setCursor(0,1);
+	lcd.print(l2);
+}

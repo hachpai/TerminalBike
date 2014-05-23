@@ -6,17 +6,17 @@ var serialPort = new SerialPort("/dev/tty.usbmodem641", {
   baudrate: 9600
 });
 
-var data_buffer = '';
+var tx_buffer = '';
 
 serialPort.on("open", function () {
-   data_buffer = ''
+   tx_buffer = ''
    console.log('open');
    serialPort.on('data', function(data) {
       console.log(':' + data);
-      data_buffer = data_buffer + data;       
-      if(data_buffer.charAt( data_buffer.length - 1) == '\n') {
-         console.log('data received: ' + data_buffer);
-         data_buffer = '';
+      tx_buffer = tx_buffer + data;       
+      if(tx_buffer.charAt( tx_buffer.length - 1) == '\n') {
+         console.log('data received: ' + tx_buffer);
+         tx_buffer = '';
       }
    });
    /*

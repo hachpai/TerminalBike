@@ -6,8 +6,8 @@
  *  License:
  *  --------
  *  This is free software. You can redistribute it and/or modify it under
- *  the terms of Creative Commons Attribution 3.0 United States License. 
- *  To view a copy of this license, visit http://creativecommons.org/licenses/by/3.0/us/ 
+ *  the terms of Creative Commons Attribution 3.0 United States License.
+ *  To view a copy of this license, visit http://creativecommons.org/licenses/by/3.0/us/
  *  or send a letter to Creative Commons, 171 Second Street, Suite 300, San Francisco, California, 94105, USA.
  *
  *  Notes:
@@ -26,7 +26,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
-#define NRF2401_BUFFER_SIZE 25
+#define NRF2401_BUFFER_SIZE 8 // We don't need more than 8 bytes(#PCK,CODE OPERATION, DATA(max 6 bytes con RFID)). To modify in both nrf2401.h files
 
 #define DR1 4
 #define CE  8
@@ -47,9 +47,9 @@
 class Nrf2401
 {
   public:
-  
+
   // properties
-  
+
   volatile unsigned char data[NRF2401_BUFFER_SIZE];
   volatile unsigned int remoteAddress;
   volatile unsigned int localAddress;
@@ -57,9 +57,9 @@ class Nrf2401
   volatile unsigned char channel;
   volatile unsigned char power;
   volatile unsigned char mode;
-  
+
   // methods
-  
+
   Nrf2401(void);
   void rxMode(unsigned char messageSize=0);
   void txMode(unsigned char messageSize=0);
@@ -69,7 +69,7 @@ class Nrf2401
   bool available(void);
 
   // you shouldn't need to use anything below this point..
-  
+
   volatile unsigned char payloadSize;
   volatile unsigned char configuration[15];
   void configure(void);

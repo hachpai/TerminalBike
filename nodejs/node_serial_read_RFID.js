@@ -50,23 +50,23 @@ function get_user_information(rfid) {
    }
 }
 
-var data_buffer = ''; // buffer des donnes lues sur le serial port
+var tx_buffer = ''; // buffer des donnes lues sur le serial port
 
 /* lecture des donnes sur le serial port */
 serialPort.on("open", function () {
-   data_buffer = ''
+   tx_buffer = ''
    console.log('open');
    serialPort.on('data', function(data) {
       var rfid  = '';
       var user_info = '';
-      data_buffer = data_buffer + data;       
-      if(data_buffer.charAt( data_buffer.length - 1) == '\n') {
-         if(data_buffer.substr(0,5) != "Error") {
-            rfid = (data_buffer.substr(0,(data_buffer.length - 2)));
+      tx_buffer = tx_buffer + data;       
+      if(tx_buffer.charAt( tx_buffer.length - 1) == '\n') {
+         if(tx_buffer.substr(0,5) != "Error") {
+            rfid = (tx_buffer.substr(0,(tx_buffer.length - 2)));
             console.log("RFID:" + rfid);
             get_user_information(rfid);
          }
-         data_buffer = '';
+         tx_buffer = '';
       }
    });
 });

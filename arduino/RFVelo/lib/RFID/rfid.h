@@ -1,6 +1,22 @@
+/*
+rfid.h - Library for RFID reader through serial port.
+Released into the public domain.
+*/
+#ifndef Rfid_h
+#define Rfid_h
+
+#include <Arduino.h>
 #include <SoftwareSerial.h>
 
-bool serialReadLine(String &dest);
-void serialPrintLine(String s);
-bool rFIDRead(SoftwareSerial *RFIDSerial, byte *rFIDCode);
-String byteArrayToString(byte *byteArray, int byteArraySize);
+class Rfid
+{
+public:
+  Rfid(int pin_in,int pin_out);
+  bool serialReadLine(String &dest);
+  bool RFIDRead(byte *rFIDCode);
+  String byteArrayToString(byte *byteArray, int byteArraySize);
+private:
+  SoftwareSerial RFIDSerial;
+};
+
+#endif

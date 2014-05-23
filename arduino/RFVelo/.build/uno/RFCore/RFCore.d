@@ -1,4 +1,4 @@
-.build/uno/src/borne.d .build/uno/src/borne.o: .build/uno/src/borne.cpp \
+.build/uno/RFCore/RFCore.d .build/uno/RFCore/RFCore.o: lib/RFCore/RFCore.cpp lib/RFCore/RFCore.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/Arduino.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/binary.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/WCharacter.h \
@@ -9,6 +9,4 @@
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/Printable.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/new.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/variants/standard/pins_arduino.h \
-  /Applications/Arduino.app/Contents/Resources/Java/libraries/LiquidCrystal/LiquidCrystal.h \
-  /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/Print.h \
-  lib/RFCore/RFCore.h lib/nrf2401/Nrf2401.h
+  lib/nrf2401/Nrf2401.h

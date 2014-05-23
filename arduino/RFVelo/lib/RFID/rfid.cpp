@@ -1,49 +1,32 @@
 // digit 2 <-> 9
-// 5V <-> 
+// 5V <->
 // GND <->
+
 #include "rfid.h"
-#include <SoftwareSerial.h>
 
-// serialReadLine ->
-bool serialReadLine(String &dest) {
-  //Renvoie la taille lue... sur un tableau de char...
-  String ret = "";
-  byte character;
-  while (Serial.available()) {
-    character = Serial.read();
-    if(character == '\n') {
-      dest = ret;
-      return true;
-    }
-    else {
-      ret.concat(character);
-    }
-  }
-  return false;
-}
-// <- fin SerialReadLine
+//http://stackoverflow.com/questions/13169714/creating-a-library-for-an-arduino
+Rfid::Rfid(int pin_in,int pin_out)
+	: RFIDSerial(pin_in,pin_out)
+{
+	//RFIDSerial = SoftwareSerial(pin_in,pin_out);
+	RFIDSerial.begin(9600);
 
-// serialPrintLine ->
-void serialPrintLine(String s) {
-  Serial.print(s);
-  Serial.println();
 }
-// <- fin SerialPrintLine
 
 // rFIDRead ->
-bool rFIDRead(SoftwareSerial *RFIDSerial, byte *rFIDCode) {
+bool Rfid::RFIDRead(byte *rFIDCode) {
   byte i = 0;
   byte readByte = 0;
   byte tempByte = 0;
   byte checksum = 0;
-  byte bytesread = 0;  
-  if(RFIDSerial->available() > 0) {
-    if((readByte = RFIDSerial->read()) == 2) {                  // check for header 
-      bytesread = 0; 
+  byte bytesread = 0;
+  if(RFIDSerial.available() > 0) {
+    if((readByte = RFIDSerial.read()) == 2) {                  // check for header
+      bytesread = 0;
       while (bytesread < 12) {                        // read 10 digit code + 2 digit checksum
-        if( RFIDSerial->available() > 0) { 
-          readByte = RFIDSerial->read();
-          if((readByte == 0x0D)||(readByte == 0x0A)||(readByte == 0x03)||(readByte == 0x02)) { // if header or stop bytes before the 10 digit reading 
+        if( RFIDSerial.available() > 0) {
+          readByte = RFIDSerial.read();
+          if((readByte == 0x0D)||(readByte == 0x0A)||(readByte == 0x03)||(readByte == 0x02)) { // if header or stop bytes before the 10 digit reading
             return false;                                  // stop reading
           }
 
@@ -68,7 +51,7 @@ bool rFIDRead(SoftwareSerial *RFIDSerial, byte *rFIDCode) {
           };
 
           bytesread++;                                // ready to read next digit
-        } 
+        }
       }
 
       if (bytesread == 12) {              // if 12 digit read is complete
@@ -83,15 +66,14 @@ bool rFIDRead(SoftwareSerial *RFIDSerial, byte *rFIDCode) {
 // <- fin RFIDRead
 
 // byteArrayToString ->
-String byteArrayToString(byte *byteArray, int byteArraySize) {
+String Rfid::byteArrayToString(byte *byteArray, int byteArraySize) {
   int i;
   String ret = "";
   for (i=0; i<byteArraySize; i++) {
     if(byteArray[i] < 16) ret += "0";
-    ret += String(byteArray[i], HEX);   
+    ret += String(byteArray[i], HEX);
     if (i < 4) ret += " ";
   }
   return ret;
 }
 // <- fin byteArrayToString
-
