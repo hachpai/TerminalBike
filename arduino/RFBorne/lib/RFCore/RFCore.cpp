@@ -14,8 +14,10 @@ unsigned char CHANNEL_COM = 100;
 bool bc_initializer = false;
 
 int tx_index=0;
-int rx_index=0;
+int rx_index=0; //index of the last packet received and correctly read.
 volatile bool packets_status[STACK_SIZE];
+
+volatile int debug_i=-1;
 
 RFCore::RFCore(unsigned int id, bool bc_in) //we could dynamically allocate arrays to enlarge lib capacity
 {
@@ -39,30 +41,41 @@ RFCore::RFCore(unsigned int id, bool bc_in) //we could dynamically allocate arra
 
 void RFCore::sendPacket(unsigned char *packet){
   Radio.txMode(PACKET_SIZE+1); //packet size for 6max char, plus one byte of packet number
+  //IMPORTANT:putting the RF chip in txmode avoid an rx interrupt, resulting in inchorent data in Radio.data
+  //(interruption of the for)
   Radio.data[0]=tx_index; //the number of packet
   for (int i=0; i<PACKET_SIZE; i++) {
-    tx_data[(tx_index*PACKET_SIZE)+i]=packet[i];
-    Radio.data[i+1] = packet[i];
+    tx_data[(tx_index*PACKET_SIZE)+i]=packet[i]; //backup the packet in the tx_data stack
+    Radio.data[i+1]=packet[i];
   }
   tx_index++;
-
   Radio.write();
-  Radio.rxMode(); //get back in reception.
+  Radio.rxMode(PACKET_SIZE+1); //get back in reception. RX interruptions occur again.
 }
 
-void RFCore::getNextPacket(unsigned char *packet){
-  /*if(!packets_status[index_logic]){
-    delay(TIMEOUT) // wait the packet
-    !packets_status[index_logic] return false //packet not yet arrived, time out.
-  }*/
-  for(int i = 0;i<PACKET_SIZE;i++){
-    packet[i]=tx_data[(rx_index*PACKET_SIZE)+i];
+bool RFCore::getNextPacket(unsigned char *packet){
+  int initial_time = millis();
+  int current_time = initial_time;
+  while(!packets_status[rx_index] && (current_time - initial_time)<TIMEOUT_DELAY){ //while packet not received and timeout not reached
+    current_time = millis();
+    retransmissionQuery(rx_index);
+    delay(50); // wait the packet
   }
+  if(!packets_status[rx_index]) return false; //packet not yet arrived, time out, return false
 
-  for(int i =0; i<STACK_SIZE*PACKET_SIZE; i++){
-    Serial.print(tx_data[i]);
-    Serial.print(" - ");
+  for(int i = 0;i<PACKET_SIZE;i++){
+    packet[i]=rx_data[(rx_index*PACKET_SIZE)+i];
   }
+  rx_index++;
+  return true;
+}
+
+void RFCore::retransmissionQuery(unsigned char pck_number){
+  Radio.txMode(2);
+  Radio.data[0]=255; //retransmission query code
+  Radio.data[1]=pck_number;
+  Radio.write();
+  Radio.rxMode(PACKET_SIZE+1);
 }
 
 void RFCore::addTXPacket(unsigned char *new_packet,int num_packet){
@@ -90,8 +103,7 @@ bool RFCore::handShake(){ // return true if handshaking is established
     Radio.data[0] = local_id;
     Radio.write(); // Send his bike ID to the terminal
   }
-  changeChannel(CHANNEL_COM);
-
+  changeChannel(CHANNEL_COM); //both change channel
   Radio.remoteAddress = remote_id; // we can specify addresses now, bike has  received the terminal id and sent its own id.
   Radio.localAddress = local_id;
   return true;
@@ -111,10 +123,31 @@ delay(50);
 return false;
 }
 
+/*DEBUG FONCTIONS*/
+
 int RFCore::getRemoteID(){
   return remote_id;
 }
 
+int RFCore::getCounter(){
+  return debug_i;
+}
+
+void RFCore::printSerialBuffers(){
+  Serial.print("TX BUFFER:");
+  for(int i =0; i<STACK_SIZE*PACKET_SIZE; i++){
+    Serial.print(tx_data[i]);
+    Serial.print(' ');
+  }
+  Serial.println(' ');
+  Serial.print("RX BUFFER:");
+  for(int i =0; i<STACK_SIZE*PACKET_SIZE; i++){
+    Serial.print(rx_data[i]);
+    Serial.print(' ');
+  }
+  Serial.println(' ');
+}
+/*END DEBUG*/
 void RFCore::changeChannel(int new_channel){
   if(Radio.channel != new_channel){
     Radio.channel = new_channel;
@@ -124,6 +157,7 @@ void RFCore::changeChannel(int new_channel){
 
 void RFCore::messageReceived(void){
   if(Radio.available()){
+
     Radio.read();
     if (Radio.channel == CHANNEL_BROADCAST)
     {
@@ -132,13 +166,23 @@ void RFCore::messageReceived(void){
     }
     else if (Radio.channel == CHANNEL_COM){
       int packet_number = Radio.data[0];
-      packets_status[packet_number] = true;
-      if(packet_number !=255){ //255 is reserved to announce a missing packet.
+      if(packet_number != 255){ //255 is reserved to announce a missing packet.
         for (int i=0; i<PACKET_SIZE; i++) {
           rx_data[(packet_number*PACKET_SIZE)+i]=Radio.data[i+1];
+          if(Radio.data[i+1] != 0) debug_i = Radio.data[i+1];
         }
-        rx_index = packet_number;
+        packets_status[packet_number] = true;
+      }
+      else{ //the other board ask for a packet retransmission
+        int pck_number_queried = Radio.data[1];
+        Radio.txMode(PACKET_SIZE+1);
+        Radio.data[0] = pck_number_queried;
+        for(int i = 0;i<PACKET_SIZE;i++){
+          Radio.data[i+1]=tx_data[(pck_number_queried*PACKET_SIZE)+i];
+        }
+        Radio.write();
       }
     }
   }
+  Radio.rxMode(PACKET_SIZE+1);
 }

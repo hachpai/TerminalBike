@@ -13,7 +13,7 @@ RFCore * rf_core;
 
 unsigned int BIKE_ID = 200;
 //byte client_rfid[6]={10,20,34,12,11,42};
-byte client_rfid[6] = {0,0,0,0,0,0};
+byte client_rfid[6] = {34,35,36,37,38,39};
 unsigned char data[6]= {0,0,0,0,0,0};
 
 volatile unsigned char request_code=0;
@@ -49,7 +49,13 @@ void loop(void)
 	Serial.println(result);
 	data[0]=20;
 	rf_core->sendPacket(data);
-	Serial.print("bou");
+	for(int i = 0;i <5;i++){
+		rf_core->sendPacket(client_rfid);
+	}
+	rf_core->printSerialBuffers();
+	rf_core->sendPacket(client_rfid);
+	rf_core->printSerialBuffers();
+	delay(200000);
 	//Radio.channel= 111;
 
 /*	Radio.rxMode(1);
