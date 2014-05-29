@@ -18,7 +18,7 @@ class RFCore
     void sendPacket(unsigned char *packet);
     bool getNextPacket(unsigned char *packet);
     void printSerialBuffers();
-    int getCounter();
+    void toDebug();  
   private:
     void retransmissionQuery(unsigned char pck_number);
     static void messageReceived(void);

@@ -26,7 +26,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
-#define NRF2401_BUFFER_SIZE 8 // We don't need more than 8 bytes(#PCK,CODE OPERATION, DATA(max 6 bytes con RFID)). To modify in both nrf2401.h files
+#define NRF2401_BUFFER_SIZE 7 // We don't need more than 7 bytes(#PCK, DATA(max 6 bytes con RFID)). To modify in both nrf2401.h files
 
 #define DR1 4
 #define CE  8

@@ -66,37 +66,38 @@ void setup(void)
 }
 
 void loop(void){
+	rf_core->toDebug();
 	while(!rf_core->handShake()){
 		lcd.home();
 		lcd.print("BROADCASTING...");
 	}
 
 	digitalWrite(led, HIGH);
-	rf_core->printSerialBuffers();
+	rf_core->toDebug();
 
 	String result = "ID received:";
 	result = result + rf_core->getRemoteID();
 	displayInfos("BIKE FOUND!",result);
 	delay(1000);//wait for data
 	boolean data_received = rf_core->getNextPacket(&data[0]); //get the operation code
-	rf_core->printSerialBuffers();
+	rf_core->toDebug();
 	if(data_received){
 	result = byteArrayToString(&data[0],6);
 	displayInfos("Operation Code:",result);
 	Serial.println(result);
 	}
 	else displayInfos("Data status:","not received.");
-	rf_core->printSerialBuffers();
-	delay(20000);
-	delay(1000);
-	Serial.print("SECOND CALL");
+	rf_core->toDebug();
 	data_received = rf_core->getNextPacket(&data[0]); //get the RFID
-	Serial.println("counter:");
-	Serial.println(rf_core->getCounter());
+	rf_core->toDebug();
 	result = byteArrayToString(&data[0],6);
-
 	displayInfos("RFID Received:",result);
-
+	data[0]= 1;
+	data[1]= 0;
+	data[3]= 1;
+	data[4]= 1;
+	rf_core->sendPacket(data);
+	delay(200000);
 }
 
 void displayInfos(String l1, String l2){

@@ -14,6 +14,9 @@ RFCore * rf_core;
 unsigned int BIKE_ID = 200;
 //byte client_rfid[6]={10,20,34,12,11,42};
 byte client_rfid[6] = {34,35,36,37,38,39};
+byte pck2[6] = {51,52,53,54,55,56};
+byte pck3[6] = {61,62,63,64,65,66};
+byte pck4[6] = {81,82,83,84,85,86};
 unsigned char data[6]= {0,0,0,0,0,0};
 
 volatile unsigned char request_code=0;
@@ -25,22 +28,21 @@ void setup(void)
 {
 	Serial.begin(9600);
 	pinMode(13, OUTPUT);
-  rf_core = new RFCore(BIKE_ID, false);
+	rf_core = new RFCore(BIKE_ID, false);
 }
 
 void loop(void)
 {
-	if(rfid.RFIDRead(&client_rfid[0])) {
-		Serial.println("RFID READ");
-		state = 1;
-		for(int i =0; i<6;i++){
-			Serial.print(client_rfid[i],HEX);
-		}
-		Serial.print('\n');
-		//delay(1000);
-
+	while(!rfid.RFIDRead(&client_rfid[0])) {
+		delay(10);
+		Serial.println("WAIT RFID");
 	}
-	Serial.println("NO RFID");
+	Serial.println("RFID READ!");
+	state = 1;
+	for(int i =0; i<6;i++){
+		Serial.print(client_rfid[i],HEX);
+	}
+	Serial.print('\n');
 	while(!rf_core->handShake()){
 		Serial.println("Listening...");
 	}
@@ -48,59 +50,66 @@ void loop(void)
 	result = result + rf_core->getRemoteID();
 	Serial.println(result);
 	data[0]=20;
-	rf_core->sendPacket(data);
-	for(int i = 0;i <5;i++){
-		rf_core->sendPacket(client_rfid);
+	rf_core->sendPacket(data); //send operation code
+	rf_core->sendPacket(client_rfid); //send RFID customer
+	Serial.println("waitdata");
+	delay(1000);//wait data
+
+	if(rf_core->getNextPacket(&data[0])){
+		Serial.println("code received:");
+		for(int i =0; i<6;i++){
+			Serial.print(data[i]);
+		}
+		Serial.print('\n');
 	}
-	rf_core->printSerialBuffers();
-	rf_core->sendPacket(client_rfid);
-	rf_core->printSerialBuffers();
+
+	rf_core->toDebug();
 	delay(200000);
 	//Radio.channel= 111;
 
-/*	Radio.rxMode(1);
+	/*	Radio.rxMode(1);
 
-		//WARNING: To flush the serial buffer at the end of complete transaction
-	}
-	if(borne_id==0)
-	{
+	//WARNING: To flush the serial buffer at the end of complete transaction
+}
+if(borne_id==0)
+{
 
-	}
-	else{
-		Serial.print("BORNE FOUND! ID:");
-		Serial.println(borne_id);
-		Radio.txMode(1);
-		Radio.data[0] = BIKE_ID;
-		Radio.write(); // Send his bike ID
-		changeChannel(CHANNEL_COM);
-		delay(1000); //wait for second arduino
-		sendRFID();
-		Radio.rxMode(2);
-		while(request_code != 45); // RC of 43 for user code reception
-		Serial.println("user code received:");
-		Serial.println(data_request);
-		borne_id = 0;
-		Radio.localAddress = 0; //to receive broadcast packets
-		Radio.remoteAddress = 0;
-		state=0;
-		for(int i =0;i<6;i++){
-			client_rfid[i] =0; //6 bytes of RFID
-		}
-		Serial.println("END");
-		delay(2000);
+}
+else{
+Serial.print("BORNE FOUND! ID:");
+Serial.println(borne_id);
+Radio.txMode(1);
+Radio.data[0] = BIKE_ID;
+Radio.write(); // Send his bike ID
+changeChannel(CHANNEL_COM);
+delay(1000); //wait for second arduino
+sendRFID();
+Radio.rxMode(2);
+while(request_code != 45); // RC of 43 for user code reception
+Serial.println("user code received:");
+Serial.println(data_request);
+borne_id = 0;
+Radio.localAddress = 0; //to receive broadcast packets
+Radio.remoteAddress = 0;
+state=0;
+for(int i =0;i<6;i++){
+client_rfid[i] =0; //6 bytes of RFID
+}
+Serial.println("END");
+delay(2000);
 
 
 
-	}*/
+}*/
 }
 
 /**void sendRFID(){
-	Radio.txMode(6);
-	Radio.data[0] = 42; //withdraw code
-	for(int i =0;i<6;i++){
-		Radio.data[i+1] = client_rfid[i]; //6 bytes of RFID
-		Serial.print(client_rfid[i]);
-		Serial.print(" ");
-	}
-	Radio.write();
+Radio.txMode(6);
+Radio.data[0] = 42; //withdraw code
+for(int i =0;i<6;i++){
+Radio.data[i+1] = client_rfid[i]; //6 bytes of RFID
+Serial.print(client_rfid[i]);
+Serial.print(" ");
+}
+Radio.write();
 }**/
