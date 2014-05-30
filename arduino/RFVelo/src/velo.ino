@@ -27,18 +27,19 @@ void setup(void)
 
 void loop(void)
 {
+	Serial.println("WAIT RFID");
 	while(!rfid.RFIDRead(&client_rfid[0])) {
-		delay(10);
-		Serial.println("WAIT RFID");
+		delay(50);
 	}
 	Serial.println("RFID READ!");
 	state = 1;
 	for(int i =0; i<6;i++){
 		Serial.print(client_rfid[i],HEX);
 	}
-	Serial.print('\n');
+	Serial.println(' ');
+	Serial.println("Listening...");
 	while(!rf_core->handShake()){
-		Serial.println("Listening...");
+		delay(50); //wait for the handshake
 	}
 	String result = "ID received:";
 	result = result + rf_core->getRemoteID();
@@ -48,7 +49,6 @@ void loop(void)
 	rf_core->sendPacket(client_rfid); //send RFID customer
 	Serial.println("waitdata");
 	delay(1000);//wait data
-
 	if(rf_core->getNextPacket(&data[0])){
 		Serial.println("code received:");
 		for(int i =0; i<6;i++){

@@ -17,6 +17,14 @@ int tx_index=0;
 int rx_index=0; //index of the last packet received and correctly read.
 volatile bool packets_status[STACK_SIZE];
 
+//DEBUG VARIABLES
+volatile int received_packet_counter = 0;
+volatile int packet_missed_counter=0;
+String pck_seq="RECEIVED PACKET SEQ:";
+String data_rcv_seq="RECEIVED DATA SEQ:";
+String data_send_log="DATA SEND LOG:";
+//End debug
+
 RFCore::RFCore(unsigned int id, bool bc_in) //we could dynamically allocate arrays to enlarge lib capacity
 {
   for(int i =0; i<STACK_SIZE*PACKET_SIZE; i++){
@@ -46,12 +54,12 @@ void RFCore::sendPacket(unsigned char *packet){
   for (int i=0; i<PACKET_SIZE; i++) {
     tx_data[(tx_index*PACKET_SIZE)+i]=packet[i]; //backup the packet in the tx_data stack
     Radio.data[i+1]=packet[i];
+    data_send_log += String(Radio.data[i+1]);
   }
   tx_index++;
-  Serial.print("pck send number:");
-  Serial.println(Radio.data[0]);
   Radio.write();
   Radio.rxMode(NRF2401_BUFFER_SIZE); //get back in reception. RX interruptions occur again.
+  delay(100); // to let the time at the other arduino to treat the datas
 }
 
 bool RFCore::getNextPacket(unsigned char *packet){
@@ -60,21 +68,26 @@ bool RFCore::getNextPacket(unsigned char *packet){
   while(!packets_status[rx_index] && (current_time - initial_time)<TIMEOUT_DELAY){ //while packet not received and timeout not reached
     current_time = millis();
     retransmissionQuery(rx_index);
-    delay(50); // wait the packet
+    delay(100); // wait the packet
   }
   if(!packets_status[rx_index]) return false; //packet not yet arrived, time out, return false
 
   for(int i = 0;i<PACKET_SIZE;i++){
     packet[i]=rx_data[(rx_index*PACKET_SIZE)+i];
   }
-  rx_index++;
+  rx_index++; // the packet is correctly transmit to the program.
   return true;
 }
 
 void RFCore::retransmissionQuery(unsigned char pck_number){
-  Radio.txMode(2);
+  Serial.print("ASKING for retransmission:");
+  Serial.println(pck_number);
+  Radio.txMode(NRF2401_BUFFER_SIZE);
   Radio.data[0]=255; //retransmission query code
   Radio.data[1]=pck_number;
+  for(int i = 2;i<PACKET_SIZE;i++){
+    Radio.data[i] = 0;
+  }
   Radio.write();
   Radio.rxMode(NRF2401_BUFFER_SIZE);
 }
@@ -154,11 +167,8 @@ void printBooleanACK(){
   Serial.println(' ');
 }
 
-volatile int received_packet_counter = 0;
-volatile int packet_missed_counter=0;
-String suitepck="suitepck:";
 
-void RFCore::toDebug(){
+void RFCore::toDebug(){ //WARNING: this functions introduce strange effect, see history file. 
   Serial.println("-------RF DEBUG-----------");
   Serial.print("Radio channel:");
   Serial.println(Radio.channel);
@@ -170,11 +180,13 @@ void RFCore::toDebug(){
   Serial.println(Radio.remoteAddress);
   Serial.print("Packet received counter:");
   Serial.println(received_packet_counter);
-  Serial.print("Packet missed counter:");
+  Serial.print("Packet missed received queries counter:");
   Serial.println(packet_missed_counter);
   printSerialBuffers();
   printBooleanACK();
-  Serial.println(suitepck);
+  Serial.println(pck_seq);
+  Serial.println(data_rcv_seq);
+  Serial.println(data_send_log);
   Serial.println("--------------------------");
 }
 /*END DEBUG*/
@@ -196,16 +208,17 @@ void RFCore::messageReceived(void){
     else if (Radio.channel == CHANNEL_COM){
       int packet_number = Radio.data[0];
       if(packet_number != 255){ //255 is reserved to announce a missing packet.
-        received_packet_counter++;
+        received_packet_counter++; // for debug and stats
+
         for (int i=0; i<PACKET_SIZE; i++) {
           rx_data[(packet_number*PACKET_SIZE)+i]=Radio.data[i+1];
+          data_rcv_seq += String(Radio.data[i+1]);
         }
-        String thisString = String(packet_number);
-        suitepck += thisString;
+        pck_seq += String(packet_number);
         packets_status[packet_number] = true;
       }
       else{ //the other board ask for a packet retransmission
-        packet_missed_counter++; //for statistic
+        packet_missed_counter++; //for statistics
         int pck_number_queried = Radio.data[1]; //format is retransmit code, packet to resend
         Radio.txMode(NRF2401_BUFFER_SIZE);
         Radio.data[0] = pck_number_queried;

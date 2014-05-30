@@ -2,7 +2,7 @@
 #include <Nrf2401.h>
 #define STACK_SIZE 6
 #define PACKET_SIZE 6
-#define TIMEOUT_DELAY 1500
+#define TIMEOUT_DELAY 2000
 #ifndef RFCore_h
 #define RFCore_h
 
@@ -18,7 +18,7 @@ class RFCore
     void sendPacket(unsigned char *packet);
     bool getNextPacket(unsigned char *packet);
     void printSerialBuffers();
-    void toDebug();  
+    void toDebug();
   private:
     void retransmissionQuery(unsigned char pck_number);
     static void messageReceived(void);

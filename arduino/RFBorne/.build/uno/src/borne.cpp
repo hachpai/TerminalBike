@@ -1,12 +1,12 @@
 #include <Arduino.h>
 #include <LiquidCrystal.h>
 #include "RFCore.h"
-void serialPrintLine(String s);
-String byteArrayToString(byte *byteArray, int byteArraySize);
-boolean serialReadLine(String &dest);
 void setup(void);
 void loop(void);
 void displayInfos(String l1, String l2);
+void serialPrintLine(String s);
+String byteArrayToString(byte *byteArray, int byteArraySize);
+boolean serialReadLine(String &dest);
 #line 1 "src/borne.ino"
 
 //#include <LiquidCrystal.h>
@@ -14,7 +14,6 @@ void displayInfos(String l1, String l2);
 
 RFCore * rf_core;
 
-unsigned int BIKE_ID = 200;
 //byte client_rfid[6]={10,20,34,12,11,42};
 unsigned char data[6] = {0,0,0,0,0,0};
 
@@ -27,6 +26,58 @@ unsigned char BORNE_ID=42;
 
 byte WITHDRAW_CODE=10;
 byte RETURN_CODE=20;
+
+int led =13;
+LiquidCrystal lcd(12, 11, 10, 9, 8, 7);
+void setup(void)
+{
+	Serial.begin(9600);
+	pinMode(led, OUTPUT);
+	lcd.begin(16, 2);
+	rf_core = new RFCore(BORNE_ID, true);
+}
+
+byte locker_code[6] = {1,0,0,1,1,0};
+
+void loop(void){
+	while(!rf_core->handShake()){
+		lcd.home();
+		lcd.print("BROADCASTING...");
+	}
+	digitalWrite(led, HIGH);
+	String result = "ID received:";
+	result = result + rf_core->getRemoteID();
+	displayInfos("BIKE FOUND!",result);
+	//delay(1000);//wait for data
+
+	boolean data_available = rf_core->getNextPacket(&data[0]); //get the operation code
+	if(data_available){
+		result = byteArrayToString(&data[0],6);
+		displayInfos("Operation Code:",result);
+	}
+	else{
+		displayInfos("Data status:","not received.");
+	}
+	data_available = rf_core->getNextPacket(&data[0]); //get the RFID
+	if(data_available){
+		result = byteArrayToString(&data[0],6);
+		displayInfos("RFID Received:",result);
+	}
+	else{
+		displayInfos("Data status:","not received.");
+	}
+	rf_core->sendPacket(locker_code);
+	rf_core->toDebug(); //DO THIS AT THE END!! strange effects otherwise
+	delay(200000);
+}
+
+void displayInfos(String l1, String l2){
+	lcd.clear();
+	lcd.home();
+	lcd.print(l1);
+	lcd.setCursor(0,1);
+	lcd.print(l2);
+}
 
 // serialPrintLine ->
 void serialPrintLine(String s) {
@@ -63,57 +114,4 @@ boolean serialReadLine(String &dest) {
 		}
 	}
 	return false;
-}
-
-int led =13;
-LiquidCrystal lcd(12, 11, 10, 9, 8, 7);
-void setup(void)
-{
-	Serial.begin(9600);
-	pinMode(led, OUTPUT);
-	lcd.begin(16, 2);
-	rf_core = new RFCore(BORNE_ID, true);
-}
-
-void loop(void){
-	rf_core->toDebug();
-	while(!rf_core->handShake()){
-		lcd.home();
-		lcd.print("BROADCASTING...");
-	}
-
-	digitalWrite(led, HIGH);
-	rf_core->toDebug();
-
-	String result = "ID received:";
-	result = result + rf_core->getRemoteID();
-	displayInfos("BIKE FOUND!",result);
-	delay(1000);//wait for data
-	boolean data_received = rf_core->getNextPacket(&data[0]); //get the operation code
-	rf_core->toDebug();
-	if(data_received){
-	result = byteArrayToString(&data[0],6);
-	displayInfos("Operation Code:",result);
-	Serial.println(result);
-	}
-	else displayInfos("Data status:","not received.");
-	rf_core->toDebug();
-	data_received = rf_core->getNextPacket(&data[0]); //get the RFID
-	rf_core->toDebug();
-	result = byteArrayToString(&data[0],6);
-	displayInfos("RFID Received:",result);
-	data[0]= 1;
-	data[1]= 0;
-	data[3]= 1;
-	data[4]= 1;
-	rf_core->sendPacket(data);
-	delay(200000);
-}
-
-void displayInfos(String l1, String l2){
-	lcd.clear();
-	lcd.home();
-	lcd.print(l1);
-	lcd.setCursor(0,1);
-	lcd.print(l2);
 }

@@ -34,3 +34,63 @@ Radio.write();
 //Serial.print("END!!");
 bike_id = 0;
 Radio.remoteAddress = 0;*/
+
+
+THE STRANGE RFCORE BUG, DUE TO TODEBUG, to investigate
+void loop(void){
+  rf_core->toDebug();
+  while(!rf_core->handShake()){
+    lcd.home();
+    lcd.print("BROADCASTING...");
+  }
+  digitalWrite(led, HIGH);
+  rf_core->toDebug();
+  String result = "ID received:";
+  result = result + rf_core->getRemoteID();
+  displayInfos("BIKE FOUND!",result);
+  //delay(1000);//wait for data
+
+  boolean data_received = rf_core->getNextPacket(&data[0]); //get the operation code
+
+  rf_core->toDebug();
+  //here works perfectly
+  /*
+  BIKE RF DEBUG
+  RX BUFFER:61 62 63 64 65 66 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+  BOOL ACK:1 0 0 0 0 0
+  RECEIVED PACKET SEQ:0
+  RECEIVED DATA SEQ:616263646566
+  */
+  if(data_received){
+    result = byteArrayToString(&data[0],6);
+    displayInfos("Operation Code:",result);
+    Serial.println(result);
+  }
+  else displayInfos("Data status:","not received.");
+
+  //here perfect too
+  rf_core->toDebug(); // try to put that in comment and works. everything is fine without toDebug
+  //pck send HERE WE HAVE
+  /*
+  BIKE RF DEBUG
+  RX BUFFER:61 62 63 64 65 66 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+  BOOL ACK:1 0 0 0 0 0
+  RECEIVED PACKET SEQ:00
+  RECEIVED DATA SEQ:000000616263646566
+  */
+  data_received = rf_core->getNextPacket(&data[0]); //get the RFID
+  rf_core->sendPacket(pck3);
+  rf_core->toDebug();
+  result = byteArrayToString(&data[0],6);
+  displayInfos("RFID Received:",result);
+  /*data[0]= 1;
+  data[1]= 0;
+  data[2]= 0;
+  data[3]= 1;
+  data[4]= 1;
+  data[5]= 0;
+  rf_core->sendPacket(data);*/
+
+  rf_core->toDebug();
+  delay(200000);
+}
