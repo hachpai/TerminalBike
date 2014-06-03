@@ -1,0 +1,5 @@
+Implement reset of RFCORE (a must to do another transaction) or destroy actual object
+Manage wrong type password (3 attempts?)
+Implement rollover for cryptography
+create our own board:http://www.gammon.com.au/forum/?id=11497
+Optimize its consummation 

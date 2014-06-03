@@ -61,6 +61,9 @@ void loop(void){
 		case RETURN_CODE:
 		break;
 		case 0:
+
+		break;
+		default:
 		break;
 	}
 	rf_core->toDebug(); //DO THIS AT THE END!! strange effects otherwise

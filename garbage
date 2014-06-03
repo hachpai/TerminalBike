@@ -1,3 +1,27 @@
+/* test code
+while(true){
+  int button_state1 = digitalRead(BUTTON_PIN1);
+  int button_state2 = digitalRead(BUTTON_PIN2);
+  String s = "state code:";
+  s+=button_state1;
+  s+=button_state2;
+  Serial.println(s);
+}
+while(true){
+  Serial.println("enter code");
+  if(getUserCode())
+  {
+    for(int i =0; i<4;i++){
+      Serial.print(user_code[i],DEC);
+    }
+    Serial.println(" ");
+    delay(100);
+  }
+  else Serial.println("TIME OUT");
+
+}
+*/
+
 /*changeChannel(CHANNEL_COM);
 //Serial.print("bike found ID:");
 //Serial.println(bike_id);
