@@ -1,5 +1,48 @@
-Implement reset of RFCORE (a must to do another transaction) or destroy actual object
+Add buzzer to confirm the button push to user (for password)
 Manage wrong type password (3 attempts?)
-Implement rollover for cryptography
+
+
+
+Implement rollover for cryptography. The delock code must be different each time.
+element of crypto: user code,RFID, id bike, private shared code.
+Need to crypt a 6 bytes communication, 48bits.
+crypt RFID With XOR and private key (easy to find the pk for a customer who know his RFID)
+SO, introduce a random variable to cipher the PK. Seed a linear cryptographicaly sure generator in each arduino with a random key.
+Share this random key with the spot (2 fields in bike DB: id_velo, generator_seed, session_counter)
+In bike:
+random_key = cifer(pk,linearRegression(seed, session_counter))
+CRYPTED_DATA = (DATA) ^ random_key
+send(CRYPTED_DATA)
+in spot:
+random_key = cifer(pk,linearRegression(seed, session_counter))
+DATA = CRYPTED_DATA ^ random_key
+
+End of transaction: bike and spot increment the session_counter
+
+Possibly, we could avoid the pk  and cipher with a randomly generated key for each bike (shared secret with generator_seed).
+
+
+to crypt: user RFID, user code. To generate unique unlocker code (!!).
+For rollover: generate the unlock_code with another linear regression, same seed?
+Spot compute: ROLLOVER = linearRegression2(seed,session_counter)
+Spot send:CRYPTED_ROLLOVER= ROLLOVER ^ random_key
+Bike compute: ROLLOVER= CRYPTED_ROLLOVER ^ random_key and check if ROLLOVER = linearRegression2(seed,session_counter)
+
+
+RFCore
+  Handshake
+spot      Client
+id1  ->   .
+.    <-   id2,id1
+(id1 correct)
+id1,    ->  .
+(id1 incorrect)
+
+
+
+
 create our own board:http://www.gammon.com.au/forum/?id=11497
-Optimize its consummation 
+Optimize its consummation
+http://www.robot-maker.com/index.php?/blog/45/entry-41-tout-ce-que-vous-pourriez-vous-demander-sur-la-consommation-dune-puce-atmega328p-puce-darduino/
+http://www.gammon.com.au/forum/?id=11497
+http://donalmorrissey.blogspot.com.es/2010/04/putting-arduino-diecimila-to-sleep.html

@@ -8,8 +8,8 @@ Nrf2401 Radio;
 unsigned int local_id = 0;
 volatile unsigned int remote_id = 0;
 
-unsigned char CHANNEL_BROADCAST = 0;
-unsigned char CHANNEL_COM = 30;
+const unsigned char CHANNEL_BROADCAST = 0;
+const unsigned char CHANNEL_COM = 30;
 
 bool bc_initializer = false;
 
@@ -28,7 +28,8 @@ String data_send_log="DATA SEND LOG:";
 RFCore::RFCore(unsigned int id, bool bc_in) //we could dynamically allocate arrays to enlarge lib capacity
 {
   for(int i =0; i<STACK_SIZE*PACKET_SIZE; i++){
-    tx_data[i]=0; //initializing the array
+    tx_data[i]=0; //initializing the TX array
+    rx_data[i]=0; //initializing the RX array
   }
   for(int i =0; i<STACK_SIZE; i++){
     packets_status[i]=false;
@@ -54,6 +55,7 @@ void RFCore::sendPacket(unsigned char *packet){
   for (int i=0; i<PACKET_SIZE; i++) {
     tx_data[(tx_index*PACKET_SIZE)+i]=packet[i]; //backup the packet in the tx_data stack
     Radio.data[i+1]=packet[i];
+    packet[i]=0; //reset the 
     data_send_log += String(Radio.data[i+1]);
   }
   tx_index++;
@@ -103,11 +105,33 @@ void RFCore::getTXPacket(unsigned char *packet,int num_packet){
   }
 }
 
-void RFCore::empty(){
+void RFCore::reset(){
   for(int i =0; i<STACK_SIZE*PACKET_SIZE; i++){
-    tx_data[i]=0; //initializing the array
+    tx_data[i]=0; //reset buffer arrays
+    rx_data[i]=0;
   }
+  for(int i =0; i<STACK_SIZE; i++){
+    packets_status[i]=false; //reset ACK
+  }
+  changeChannel(CHANNEL_BROADCAST);
+  Radio.rxMode(1);
+  if(bc_initializer){
+    Radio.localAddress = local_id; // For broadcasting, RF card can have it's own adress. Once the other has it, it can target it.
+  }
+  else Radio.localAddress = 0; // For receiving broadcasting handshake, card remain on local address 0. All bike wait terminal born on address 0.
+  Radio.remoteAddress = 0;
+  remote_id=0;
+  tx_index=0;
+  rx_index=0;
+
+  /*Reset debug var*/
+  received_packet_counter = 0;
+  packet_missed_counter=0;
+  pck_seq="RECEIVED PACKET SEQ:";
+  data_rcv_seq="RECEIVED DATA SEQ:";
+  data_send_log="DATA SEND LOG:";
 }
+
 
 bool RFCore::handShake(){ // return true if handshaking is established
   if (Radio.channel == CHANNEL_COM) return true; //if we've switched channel, it means that the handshake is done
@@ -168,7 +192,7 @@ void printBooleanACK(){
 }
 
 
-void RFCore::toDebug(){ //WARNING: this functions introduce strange effect, see history file. 
+void RFCore::toDebug(){ //WARNING: this functions introduce strange effect, see history file.
   Serial.println("-------RF DEBUG-----------");
   Serial.print("Radio channel:");
   Serial.println(Radio.channel);

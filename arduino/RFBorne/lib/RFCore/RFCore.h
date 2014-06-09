@@ -12,7 +12,7 @@ class RFCore
 {
   public:
     RFCore(unsigned int,bool);
-    void empty();
+    void reset();
     bool handShake();
     int getRemoteID();
     void sendPacket(unsigned char *packet);

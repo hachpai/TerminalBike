@@ -1,5 +1,7 @@
 #include "Rfid.h"
 #include "RFCore.h"
+
+#include <Servo.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
 /*PINs configuration*/
@@ -10,9 +12,14 @@
 const int SERIAL_IN = 7; //final version will use pin 0
 const int SERIAL_OUT = 8;//final version will use pin 1 (without serial.begin, it makes them unusable)
 
-const int RED_PIN = 9;
-const int GREEN_PIN = 10;
-const int BLUE_PIN = 11;
+const int RED_PIN = 10;
+const int GREEN_PIN = 11;
+const int BLUE_PIN = 12;
+
+const int MOTOR_PIN = 9;
+Servo locker;
+const byte OPEN_LOCKER = 70;
+const byte CLOSED_LOCKER= 160;
 
 const int BUTTON_PIN1 = 14;
 const int BUTTON_PIN2 = 15;
@@ -31,11 +38,11 @@ const byte LED_YELLOW=3;
 Rfid rfid(SERIAL_IN,SERIAL_OUT);
 RFCore * rf_core;
 
-unsigned int BIKE_ID = 200;
+unsigned int BIKE_ID = 142;
 //byte client_rfid[6]={10,20,34,12,11,42};
 byte client_rfid[6] = {34,35,36,37,38,39};
 unsigned char data[6]= {0,0,0,0,0,0};
-unsigned char user_code[4]= {0,0,0,0};
+unsigned char user_code[6]= {0,0,0,0,0,0}; //All char array about to be send must be the size of one packet
 
 volatile unsigned char request_code=0;
 volatile unsigned char data_request = 0;
@@ -57,8 +64,10 @@ void setup(void)
 	pinMode(BLUE_PIN, OUTPUT);
 	pinMode(BUTTON_PIN1, INPUT);
 	pinMode(BUTTON_PIN2, INPUT);
+	locker.attach(MOTOR_PIN);
+	locker.write(CLOSED_LOCKER); //by default, close the locker
 	pinMode(13,OUTPUT);
-	digitalWrite(13,LOW);
+	digitalWrite(13,HIGH);
 	//digitalWrite(BUTTON_PIN1,HIGH); //Enable pullup resistor on Analog Pin
 	//digitalWrite(BUTTON_PIN2,HIGH);//Enable pullup resistor on Analog Pin
 	rf_core = new RFCore(BIKE_ID, false);
@@ -72,24 +81,188 @@ void loop(void)
 		case LOCKED_TERMINAL:
 		if(withdrawBike()){
 			state = UNLOCKED;
-			delay(1000); //to let the green LED works one second, notice the success
-			rgbLed(LED_OFF);
-			Serial.println("success!");
+			locker.write(OPEN_LOCKER);
+			delay(5000); //to let the green LED works 5 seconds, notice the success
+			Serial.println("success withdraw!");
 		}
 		else{
-			Serial.println("failure!");
+			Serial.println("failure withdraw!");
 			rgbLed(LED_RED);
-			delay(1000); //to let the green LED works one second, notice the success
-			rgbLed(LED_OFF);
+			delay(5000); //to let the red LED works one second, notice the failure
 		}
 		break;
 		case UNLOCKED:
+		if(returnBike()){
+			state=LOCKED_TERMINAL;
+			locker.write(CLOSED_LOCKER);
+			Serial.println("success return!");
+		}
+		else{
+			Serial.println("failure return!");
+			rgbLed(LED_RED);
+			delay(5000); //to let the red LED works one second, notice the failure
+		}
 		break;
 	}
-
+	rf_core->reset();
 	rgbLed(LED_OFF);
 	sleepNow();
 }
+boolean returnBike(){
+	Serial.println("Listening...");
+	while(!rf_core->handShake()){
+		delay(50); //wait for the handshake
+	}
+	String result = "ID received:";
+	result = result + rf_core->getRemoteID();
+	Serial.println(result);
+	data[0]=20;
+	rf_core->sendPacket(data); //send operation code
+	rf_core->sendPacket(client_rfid); //send RFID customer, backup in the client_rfid array from withdraw transaction
+	delay(100);//wait data
+	if(!rf_core->getNextPacket(data)) return false;
+	rf_core->toDebug();
+	bool return_accepted=true;
+	for(int i = 0; i<6;i++){
+		Serial.println(data[i]==200);
+		return_accepted &= (data[i]==200);
+	}
+	if(return_accepted){
+		Serial.println("return accepted");
+		rgbLed(LED_GREEN);
+		return true;
+	}
+	return false;
+
+}
+boolean withdrawBike(){
+	rgbLed(LED_RED);
+	Serial.println("RFID READ");
+	if(!getRFID()) return false; //if we don't get the rfid code, failure
+
+	for(int i =0; i<6;i++){
+		Serial.print(client_rfid[i],HEX);
+	}
+	rgbLed(LED_YELLOW);
+	if(!getUserCode()) return false;//if we don't get the user code, failure
+	Serial.println("Introduced code");
+	for(int i =0; i<USER_CODE_LENGTH;i++){
+		Serial.print(user_code[i]);
+	}
+	Serial.println(' ');
+	Serial.println("Listening...");
+	while(!rf_core->handShake()){
+		delay(50); //wait for the handshake
+	}
+	String result = "ID received:";
+	result = result + rf_core->getRemoteID();
+	Serial.println(result);
+	data[0]=10;
+	rf_core->sendPacket(data); //send operation code
+	rf_core->sendPacket(client_rfid); //send RFID customer
+	rf_core->sendPacket(user_code); //send customer code
+	delay(100);//wait data
+	if(!rf_core->getNextPacket(data)) return false;
+	rf_core->toDebug();
+	bool withdraw_accepted=true;
+	for(int i = 0; i<6;i++){
+		Serial.println(data[i]==200);
+		withdraw_accepted &= (data[i]==200);
+	}
+	if(withdraw_accepted){
+		Serial.println("withdraw accepted");
+		rgbLed(LED_GREEN);
+		return true;
+	}
+	return false;
+}
+
+void rgbLed(byte color)
+{
+	switch (color) {
+		case LED_OFF:
+		// Off (all LEDs off):
+		digitalWrite(RED_PIN, LOW);
+		digitalWrite(GREEN_PIN, LOW);
+		digitalWrite(BLUE_PIN, LOW);
+		break;
+		case LED_RED:
+		// Red (turn just the red LED on):
+		digitalWrite(RED_PIN, HIGH);
+		digitalWrite(GREEN_PIN, LOW);
+		digitalWrite(BLUE_PIN, LOW);
+		break;
+		case LED_GREEN:
+		// Green (turn just the green LED on):
+		digitalWrite(RED_PIN, LOW);
+		digitalWrite(GREEN_PIN, HIGH);
+		digitalWrite(BLUE_PIN, LOW);
+		break;
+		case LED_YELLOW:
+		// Yellow (turn red and green on):
+		digitalWrite(RED_PIN, HIGH);
+		digitalWrite(GREEN_PIN, HIGH);
+		digitalWrite(BLUE_PIN, LOW);
+		break;
+		default:
+		// Off (all LEDs off):
+		digitalWrite(RED_PIN, LOW);
+		digitalWrite(GREEN_PIN, LOW);
+		digitalWrite(BLUE_PIN, LOW);
+	}
+}
+
+boolean getRFID(){
+	int actual_time= millis();
+	int initial_time = actual_time;
+	boolean received = false;
+	while((actual_time-initial_time) < RFID_TIMEOUT && !received) {
+		received = rfid.RFIDRead(&client_rfid[0]);
+		actual_time = millis();
+		delay(50);
+	}
+	return received;
+}
+
+boolean getUserCode(){
+	int button_state1=LOW,button_state2=LOW,index_key=0;
+	int actual_time= millis();
+	int initial_time = actual_time;
+	boolean buttons_released =false;
+	while((actual_time-initial_time) < USER_CODE_TIMEOUT && index_key < USER_CODE_LENGTH){
+		actual_time = millis();
+		button_state1 = digitalRead(BUTTON_PIN1);
+		button_state2 = digitalRead(BUTTON_PIN2);
+
+		if(button_state1== LOW && button_state2 == LOW){ // if both buttons are released
+			buttons_released = true;
+			digitalWrite(BUTTON_PIN1,LOW);
+
+		}
+		//check if user has released the buttons and if only one is pressed
+		else if(buttons_released && (button_state1== HIGH ^ button_state2 == HIGH))
+		{
+			// verify which button is pressed and if not both are pressed
+			Serial.println("INSIDE!");
+			if (button_state1 == HIGH && button_state2 == LOW) {
+				Serial.println("INSIDE 1!");
+				user_code[index_key] = 1;
+				index_key++;
+				delay(200); //to avoid contact bounce
+			}
+			else if(button_state2 == HIGH && button_state1 == LOW){
+				Serial.println("INSIDE 2!");
+				user_code[index_key] = 2;
+				index_key++;
+				delay(200); //to avoid contact bounce
+			}
+			buttons_released = false;
+
+		}
+	}
+	return (index_key == USER_CODE_LENGTH);
+}
+
 
 ISR(PCINT1_vect) { //WARNING: comment the ISR(PCINT1_vect) definition in SofwareSerial.cpp
 	switchButtonsInterrupts(false); //disable interrupt on buttons, arduino is awake, that avoid the interrupt to fire after wake.
@@ -133,118 +306,6 @@ void sleepNow()
 
 	sleep_disable();
 	digitalWrite(13,HIGH);   // turn LED on to indicate awake
-}
-
-boolean withdrawBike(){
-	rgbLed(LED_RED);
-	Serial.println("RFID READ");
-	if(!getRFID()) return false; //if we don't get the rfid code, failure
-
-	for(int i =0; i<6;i++){
-		Serial.print(client_rfid[i],HEX);
-	}
-	rgbLed(LED_YELLOW);
-	if(!getUserCode()) return false;//if we don't get the user code, failure
-	for(int i =0; i<USER_CODE_LENGTH;i++){
-		Serial.print(user_code[i]);
-	}
-	Serial.println(' ');
-	Serial.println("Listening...");
-	while(!rf_core->handShake()){
-		delay(50); //wait for the handshake
-	}
-	String result = "ID received:";
-	result = result + rf_core->getRemoteID();
-	Serial.println(result);
-	data[0]=20;
-	rf_core->sendPacket(data); //send operation code
-	rf_core->sendPacket(client_rfid); //send RFID customer
-
-	delay(1000);//wait data
-	rf_core->getNextPacket(data);
-	rf_core->toDebug();
-	if(data[0]==1){
-		rgbLed(LED_GREEN);
-		//move servomotor;
-		return true;
-	}
-	return false;
-}
-
-void rgbLed(byte color)
-{
-	switch (color) {
-		case LED_OFF:
-		// Off (all LEDs off):
-		digitalWrite(RED_PIN, LOW);
-		digitalWrite(GREEN_PIN, LOW);
-		digitalWrite(BLUE_PIN, LOW);
-		break;
-		case LED_RED:
-		// Red (turn just the red LED on):
-		digitalWrite(RED_PIN, HIGH);
-		digitalWrite(GREEN_PIN, LOW);
-		digitalWrite(BLUE_PIN, LOW);
-		break;
-		case LED_GREEN:
-		// Green (turn just the green LED on):
-		digitalWrite(RED_PIN, LOW);
-		digitalWrite(GREEN_PIN, HIGH);
-		digitalWrite(BLUE_PIN, LOW);
-		case LED_YELLOW:
-		// Yellow (turn red and green on):
-		digitalWrite(RED_PIN, HIGH);
-		digitalWrite(GREEN_PIN, HIGH);
-		digitalWrite(BLUE_PIN, LOW);
-		break;
-		default:
-		// Off (all LEDs off):
-		digitalWrite(RED_PIN, LOW);
-		digitalWrite(GREEN_PIN, LOW);
-		digitalWrite(BLUE_PIN, LOW);
-	}
-}
-
-boolean getRFID(){
-	int actual_time= millis();
-	int initial_time = actual_time;
-	boolean received = false;
-	while((actual_time-initial_time) < RFID_TIMEOUT && !received) {
-		received = rfid.RFIDRead(&client_rfid[0]);
-		actual_time = millis();
-		delay(50);
-	}
-	return received;
-}
-
-boolean getUserCode(){
-	int button_state1=LOW,button_state2=LOW,index_key=0;
-	int actual_time= millis();
-	int initial_time = actual_time;
-	boolean buttons_released =false;
-	while((actual_time-initial_time) < USER_CODE_TIMEOUT && index_key < USER_CODE_LENGTH){
-		actual_time = millis();
-		button_state1 = digitalRead(BUTTON_PIN1);
-		button_state2 = digitalRead(BUTTON_PIN2);
-
-		if(button_state1== LOW && button_state2 == LOW){ // if both buttons are released
-			buttons_released = true;
-		}
-		//check if user has released the buttons and if only one is pressed
-		else if(buttons_released && (button_state1== LOW || button_state2 == LOW))
-		{
-			// verify which button is pressed and if not both are pressed
-			if (button_state1 == HIGH && button_state2 == LOW) {
-				user_code[index_key] = 1;
-			}
-			else if(button_state2 == HIGH && button_state1 == LOW){
-				user_code[index_key] = 2;
-			}
-			buttons_released = false;
-			index_key++;
-		}
-	}
-	return (index_key == USER_CODE_LENGTH);
 }
 
 /**void sendRFID(){
