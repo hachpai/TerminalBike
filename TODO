@@ -1,7 +1,13 @@
+# Idées
+
+## Buzzer
+
 Add buzzer to confirm the button push to user (for password)
 Manage wrong type password (3 attempts?)
 
+# Problèmes à résoudre
 
+## Securite ( crypto )
 
 Implement rollover for cryptography. The delock code must be different each time.
 element of crypto: user code,RFID, id bike, private shared code.
@@ -28,18 +34,7 @@ Spot compute: ROLLOVER = linearRegression2(seed,session_counter)
 Spot send:CRYPTED_ROLLOVER= ROLLOVER ^ random_key
 Bike compute: ROLLOVER= CRYPTED_ROLLOVER ^ random_key and check if ROLLOVER = linearRegression2(seed,session_counter)
 
-
-RFCore
-  Handshake
-spot      Client
-id1  ->   .
-.    <-   id2,id1
-(id1 correct)
-id1,    ->  .
-(id1 incorrect)
-
-
-
+## Consomation de la board
 
 create our own board:http://www.gammon.com.au/forum/?id=11497
 Optimize its consummation
