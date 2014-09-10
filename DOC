@@ -1,0 +1,10 @@
+# Description du RF
+
+RFCore
+  Handshake
+spot      Client
+id1  ->   .
+.    <-   id2,id1
+(id1 correct)
+id1,    ->  .
+(id1 incorrect)
