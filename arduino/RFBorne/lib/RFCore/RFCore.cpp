@@ -1,7 +1,6 @@
 #include "RFCore.h"
 
 
-
 unsigned char tx_data[STACK_SIZE*PACKET_SIZE];
 unsigned char rx_data[STACK_SIZE*PACKET_SIZE];
 
@@ -17,7 +16,7 @@ volatile uint64_t remote_id = 0;
 //for channel preferences: http://nrqm.ca/nrf24l01/firmware/rf_ch-register/
 const unsigned char CHANNEL_BROADCAST = 101;
 const unsigned char CHANNEL_COM = 115;
-unsigned char channel;
+unsigned char channel=CHANNEL_BROADCAST;
 bool bc_initializer = false;
 
 int tx_index=0;
@@ -46,7 +45,7 @@ RFCore::RFCore(uint64_t id, bool bc_in) //we could dynamically allocate arrays t
   local_id=id;
   radio.setPALevel(RF24_PA_MAX);
   // 8 bits CRC
-  radio.setCRCLength( RF24_CRC_8 ) ;
+  radio.setCRCLength(RF24_CRC_8) ;
   // Enabling hardware ACK
   //radio.enableAckPayload();
   radio.setAutoAck(false);
@@ -64,10 +63,10 @@ RFCore::RFCore(uint64_t id, bool bc_in) //we could dynamically allocate arrays t
   bc_initializer = bc_in;
   //for pipes explanations:http://maniacalbits.blogspot.be/2013/04/rf24-avoiding-rx-pipe-0-for-enhanced.html
   if(bc_initializer){
-    radio.openWritingPipe(local_id); // For broadcasting, RF card can have it's own address. Once the other has it, it can target it.
+    radio.openReadingPipe(1,local_id); // For broadcasting, RF card can have it's own address. Once the other has it, it can target it.
   }
-  else radio.openWritingPipe(0x000000000000); // For receiving broadcasting handshake, card remain on local address 0. All bike wait terminal born on address 0.
-  radio.openReadingPipe(1,0x000000000000);
+  else radio.openReadingPipe(1,0x000000000000); // For receiving broadcasting handshake, card remain on local address 0. All bike wait terminal born on address 0.
+  radio.openWritingPipe(0x000000000000);
 
 
 }
@@ -161,11 +160,11 @@ bool RFCore::getNextPacket(unsigned char *packet){
   bool RFCore::handShake(){
     if (channel == CHANNEL_COM) return true; //if we've switched channel, it means that the handshake is done
       if(remote_id !=0){
-        radio.openReadingPipe(1,remote_id);
+        radio.openWritingPipe(remote_id);
         if(!bc_initializer){ // it's the bike, it has received the terminal ID. It's its turn to send local address.
           radio.stopListening();
-          radio.write(&local_id,PAYLOAD_SIZE); // Send his bike ID to the terminal
-          radio.openWritingPipe(local_id); //bike can now be targeted by the terminal
+          radio.write(&local_id,sizeof(uint64_t)); // Send his bike ID to the terminal
+          radio.openReadingPipe(1,local_id); //bike can now be targeted by the terminal
         }
         changeChannel(CHANNEL_COM); //both change channel
         radio.startListening(); //the passive mode, RX.
@@ -174,12 +173,12 @@ bool RFCore::getNextPacket(unsigned char *packet){
       changeChannel(CHANNEL_BROADCAST); //no connection established
       if(bc_initializer){ //if it's the terminal
         radio.stopListening(); //in transmission for broadcasting
-        radio.write(&local_id,PAYLOAD_SIZE);//terminal broadcast its ID
+        radio.write(&local_id,sizeof(uint64_t));//terminal broadcast its ID
         radio.startListening();//in reception, wait for bike ID
         delay(50);
       }
       else{ //it's the bike
-      radio.startListening();//in reception, wait for bike ID
+      radio.startListening();//in reception, wait for terminal ID
       delay(50);
     }
     return false;
@@ -228,7 +227,7 @@ bool RFCore::getNextPacket(unsigned char *packet){
       if (channel == CHANNEL_BROADCAST)
         {
           uint64_t received_address;
-          radio.read(&received_address,PAYLOAD_SIZE); // the bike received the terminal ID.
+          radio.read(&received_address,sizeof(uint64_t)); // the bike received the terminal ID.
           remote_id = received_address;
 
         }

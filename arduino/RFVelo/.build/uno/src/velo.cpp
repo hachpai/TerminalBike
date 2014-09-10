@@ -72,6 +72,7 @@ byte state=LOCKED_TERMINAL;
 void setup(void)
 {
 	Serial.begin(57600);
+
   printf_begin();
 
 	MCUCR = (1<<ISC01) | (1<<ISC00); //01 and 00 for triggering interrupts on change at low level
@@ -89,12 +90,15 @@ void setup(void)
 	digitalWrite(13,HIGH);
 	//digitalWrite(BUTTON_PIN1,HIGH); //Enable pullup resistor on Analog Pin
 	//digitalWrite(BUTTON_PIN2,HIGH);//Enable pullup resistor on Analog Pin
+	printf("test!\n\r");
 	rf_core = new RFCore(BIKE_ID, false);
+	printf("test%d!\n\r",2);
 	interrupts();
 }
 
 void loop(void)
 {
+	rf_core->toDebug();
 	switch(state){
 
 		case LOCKED_TERMINAL:

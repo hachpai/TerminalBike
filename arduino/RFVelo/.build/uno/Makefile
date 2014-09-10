@@ -85,15 +85,15 @@ include .build/uno/Servo/Servo.d
 
 
 
-.build/uno/RFCore/RFCore.o : lib/RFCore/RFCore.cpp
-	@echo [93mRFCore/RFCore.cpp[0m
+.build/uno/RFCore/RFcore.o : lib/RFCore/RFcore.cpp
+	@echo [93mRFCore/RFcore.cpp[0m
 	@mkdir -p .build/uno/RFCore
-	@/Applications/Arduino.app/Contents/Resources/Java/hardware/tools/avr/bin/avr-g++ -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=105 -I/Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino -ffunction-sections -fdata-sections -g -Os -w -I/Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/variants/standard -Ilib/RFID -I/Applications/Arduino.app/Contents/Resources/Java/libraries/Servo -Ilib/printf -Ilib/RFCore -I/Applications/Arduino.app/Contents/Resources/Java/libraries/SoftwareSerial -Ilib/rf24 -I/Applications/Arduino.app/Contents/Resources/Java/libraries/SPI -I/Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino -I/Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/avr-libc -fno-exceptions  -o $@ -c lib/RFCore/RFCore.cpp
-include .build/uno/RFCore/RFCore.d
+	@/Applications/Arduino.app/Contents/Resources/Java/hardware/tools/avr/bin/avr-g++ -mmcu=atmega328p -DF_CPU=16000000L -DARDUINO=105 -I/Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino -ffunction-sections -fdata-sections -g -Os -w -I/Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/variants/standard -Ilib/RFID -I/Applications/Arduino.app/Contents/Resources/Java/libraries/Servo -Ilib/printf -Ilib/RFCore -I/Applications/Arduino.app/Contents/Resources/Java/libraries/SoftwareSerial -Ilib/rf24 -I/Applications/Arduino.app/Contents/Resources/Java/libraries/SPI -I/Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino -I/Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/avr-libc -fno-exceptions  -o $@ -c lib/RFCore/RFcore.cpp
+include .build/uno/RFCore/RFcore.d
 
 
 
-.build/uno/RFCore/libRFCore.a : .build/uno/RFCore/RFCore.o
+.build/uno/RFCore/libRFCore.a : .build/uno/RFCore/RFcore.o
 	@echo [92mLinking libRFCore.a[0m
 	@/Applications/Arduino.app/Contents/Resources/Java/hardware/tools/avr/bin/avr-ar rcs $@ $^
 

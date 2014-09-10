@@ -45,17 +45,15 @@ byte locker_code[6] = {1,0,0,1,1,0};
 //send formated datas to nodeJS/mongoDB
 
 void loop(void){
-
 	rf_core->toDebug();
-	printf("ahahaha\n");
+	printf("casser les couilles\n\r");
 	while(!rf_core->handShake()){
-
-		printf("BROADCASTING...\n");
+		printf("BROADCASTING...\n\r");
+		delay(50);
 	}
 
-
 	digitalWrite(led, HIGH);
-	printf( "ID received:%lu",rf_core->getRemoteID());
+	printf( "ID received:%lu\n\r",rf_core->getRemoteID());
 
 	//delay(1000);//wait for data
 

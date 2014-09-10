@@ -1,4 +1,4 @@
-.build/uno/RFCore/RFCore.d .build/uno/RFCore/RFCore.o: lib/RFCore/RFCore.cpp lib/RFCore/RFCore.h \
+.build/uno/RFCore/RFcore.d .build/uno/RFCore/RFcore.o: lib/RFCore/RFcore.cpp lib/RFCore/RFCore.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/Arduino.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/binary.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/WCharacter.h \
