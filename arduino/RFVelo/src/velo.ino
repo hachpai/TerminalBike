@@ -108,7 +108,11 @@ void loop(void)
 	rgbLed(LED_OFF);
 	sleepNow();
 }
+
 boolean returnBike(){
+   /*
+      Returns true if the terminal has send ACK (accuse de recption)
+   */
 	Serial.println("Listening...");
 	while(!rf_core->handShake()){
 		delay(50); //wait for the handshake
@@ -136,6 +140,10 @@ boolean returnBike(){
 
 }
 boolean withdrawBike(){
+   /*
+      Returns true if the terminal accept the withdraw of the bike
+      ( no timeout, rifd read correctly, and correct user code )
+   */
 	rgbLed(LED_RED);
 	Serial.println("RFID READ");
 	if(!getRFID()) return false; //if we don't get the rfid code, failure
@@ -162,8 +170,8 @@ boolean withdrawBike(){
 	rf_core->sendPacket(client_rfid); //send RFID customer
 	rf_core->sendPacket(user_code); //send customer code
 	delay(100);//wait data
-	if(!rf_core->getNextPacket(data)) return false;
-	rf_core->toDebug();
+	if(!rf_core->getNextPacket(data)) return false; // if not received package return false - set the returned data into data
+	rf_core->toDebug(); // to del
 	bool withdraw_accepted=true;
 	for(int i = 0; i<6;i++){
 		Serial.println(data[i]==200);
