@@ -1,6 +1,6 @@
 #include "Rfid.h"
 #include "RFCore.h"
-
+#include "printf.h"
 #include <Servo.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
@@ -38,10 +38,10 @@ const byte LED_YELLOW=3;
 Rfid rfid(SERIAL_IN,SERIAL_OUT);
 RFCore * rf_core;
 
-unsigned int BIKE_ID = 142;
+uint64_t BIKE_ID = 142;
 //byte client_rfid[6]={10,20,34,12,11,42};
 byte client_rfid[6] = {34,35,36,37,38,39};
-unsigned char data[6]= {0,0,0,0,0,0};
+unsigned char data_buffer[6]= {0,0,0,0,0,0};
 unsigned char user_code[6]= {0,0,0,0,0,0}; //All char array about to be send must be the size of one packet
 
 volatile unsigned char request_code=0;
@@ -54,7 +54,10 @@ byte state=LOCKED_TERMINAL;
 
 void setup(void)
 {
-	Serial.begin(9600);
+	Serial.begin(57600);
+
+  printf_begin();
+
 	MCUCR = (1<<ISC01) | (1<<ISC00); //01 and 00 for triggering interrupts on change at low level
 	/*to test!*/
 	//PRR = bit(PRTIM1);                           // only keep timer 0 going
@@ -70,12 +73,15 @@ void setup(void)
 	digitalWrite(13,HIGH);
 	//digitalWrite(BUTTON_PIN1,HIGH); //Enable pullup resistor on Analog Pin
 	//digitalWrite(BUTTON_PIN2,HIGH);//Enable pullup resistor on Analog Pin
+	printf("test!\n\r");
 	rf_core = new RFCore(BIKE_ID, false);
+	printf("test%d!\n\r",2);
 	interrupts();
 }
 
 void loop(void)
 {
+	rf_core->toDebug();
 	switch(state){
 
 		case LOCKED_TERMINAL:
@@ -117,19 +123,17 @@ boolean returnBike(){
 	while(!rf_core->handShake()){
 		delay(50); //wait for the handshake
 	}
-	String result = "ID received:";
-	result = result + rf_core->getRemoteID();
-	Serial.println(result);
-	data[0]=20;
-	rf_core->sendPacket(data); //send operation code
+	printf("ID received:%l\n",rf_core->getRemoteID());
+	data_buffer[0]=20;
+	rf_core->sendPacket(data_buffer); //send operation code
 	rf_core->sendPacket(client_rfid); //send RFID customer, backup in the client_rfid array from withdraw transaction
 	delay(100);//wait data
-	if(!rf_core->getNextPacket(data)) return false;
+	if(!rf_core->getNextPacket(data_buffer)) return false;
 	rf_core->toDebug();
 	bool return_accepted=true;
 	for(int i = 0; i<6;i++){
-		Serial.println(data[i]==200);
-		return_accepted &= (data[i]==200);
+		Serial.println(data_buffer[i]==200);
+		return_accepted &= (data_buffer[i]==200);
 	}
 	if(return_accepted){
 		Serial.println("return accepted");
@@ -162,20 +166,19 @@ boolean withdrawBike(){
 	while(!rf_core->handShake()){
 		delay(50); //wait for the handshake
 	}
-	String result = "ID received:";
-	result = result + rf_core->getRemoteID();
-	Serial.println(result);
-	data[0]=10;
-	rf_core->sendPacket(data); //send operation code
+	printf("ID received:%lu\n",rf_core->getRemoteID());
+	data_buffer[0]=10;
+	rf_core->sendPacket(data_buffer); //send operation code
 	rf_core->sendPacket(client_rfid); //send RFID customer
 	rf_core->sendPacket(user_code); //send customer code
 	delay(100);//wait data
-	if(!rf_core->getNextPacket(data)) return false; // if not received package return false - set the returned data into data
+
+   if(!rf_core->getNextPacket(data_buffer)) return false; // if not received package return false - set the returned data into data
 	rf_core->toDebug(); // to del
 	bool withdraw_accepted=true;
 	for(int i = 0; i<6;i++){
-		Serial.println(data[i]==200);
-		withdraw_accepted &= (data[i]==200);
+		Serial.println(data_buffer[i]==200);
+		withdraw_accepted &= (data_buffer[i]==200);
 	}
 	if(withdraw_accepted){
 		Serial.println("withdraw accepted");
@@ -318,9 +321,9 @@ void sleepNow()
 
 /**void sendRFID(){
 Radio.txMode(6);
-Radio.data[0] = 42; //withdraw code
+Radio.data_buffer[0] = 42; //withdraw code
 for(int i =0;i<6;i++){
-Radio.data[i+1] = client_rfid[i]; //6 bytes of RFID
+Radio.data_buffer[i+1] = client_rfid[i]; //6 bytes of RFID
 Serial.print(client_rfid[i]);
 Serial.print(" ");
 }
@@ -331,10 +334,10 @@ Radio.write();
 /*	Radio.rxMode(1);
 
 //WARNING: To flush the serial buffer at the end of complete transaction
-if(rf_core->getNextPacket(&data[0])){
+if(rf_core->getNextPacket(&data_buffer[0])){
 Serial.println("code received:");
 for(int i =0; i<6;i++){
-Serial.print(data[i]);
+Serial.print(data_buffer[i]);
 }
 Serial.print('\n');
 }
@@ -347,7 +350,7 @@ else{
 Serial.print("BORNE FOUND! ID:");
 Serial.println(borne_id);
 Radio.txMode(1);
-Radio.data[0] = BIKE_ID;
+Radio.data_buffer[0] = BIKE_ID;
 Radio.write(); // Send his bike ID
 changeChannel(CHANNEL_COM);
 delay(1000); //wait for second arduino

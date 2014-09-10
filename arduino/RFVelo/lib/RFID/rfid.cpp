@@ -8,7 +8,7 @@
 Rfid::Rfid(int pin_in,int pin_out)
 	: RFIDSerial(pin_in,pin_out)
 {
-	//RFIDSerial = SoftwareSerial(pin_in,pin_out);
+	RFIDSerial = SoftwareSerial(pin_in,pin_out);
 	RFIDSerial.begin(9600);
 
 }

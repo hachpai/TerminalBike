@@ -9,6 +9,7 @@
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/Printable.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/new.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/variants/standard/pins_arduino.h \
-  /Applications/Arduino.app/Contents/Resources/Java/libraries/LiquidCrystal/LiquidCrystal.h \
-  /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/Print.h \
-  lib/RFCore/RFCore.h lib/nrf2401/Nrf2401.h
+  lib/RFCore/RFCore.h \
+  /Applications/Arduino.app/Contents/Resources/Java/libraries/SPI/SPI.h \
+  lib/rf24/nRF24L01.h lib/rf24/RF24.h lib/rf24/RF24_config.h \
+  lib/printf/printf.h

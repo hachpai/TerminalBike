@@ -12,5 +12,8 @@
   lib/RFID/Rfid.h \
   /Applications/Arduino.app/Contents/Resources/Java/libraries/SoftwareSerial/SoftwareSerial.h \
   /Applications/Arduino.app/Contents/Resources/Java/hardware/arduino/cores/arduino/Stream.h \
-  lib/RFCore/RFCore.h lib/nrf2401/Nrf2401.h \
+  lib/RFCore/RFCore.h \
+  /Applications/Arduino.app/Contents/Resources/Java/libraries/SPI/SPI.h \
+  lib/rf24/nRF24L01.h lib/rf24/RF24.h lib/rf24/RF24_config.h \
+  lib/printf/printf.h \
   /Applications/Arduino.app/Contents/Resources/Java/libraries/Servo/Servo.h
