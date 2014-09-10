@@ -1,7 +1,6 @@
 Add buzzer to confirm the button push to user (for password)
+
 Manage wrong type password (3 attempts?)
-
-
 
 Implement rollover for cryptography. The delock code must be different each time.
 element of crypto: user code,RFID, id bike, private shared code.
@@ -37,7 +36,6 @@ id1  ->   .
 (id1 correct)
 id1,    ->  .
 (id1 incorrect)
-
 
 
 
