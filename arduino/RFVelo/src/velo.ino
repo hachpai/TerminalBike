@@ -56,7 +56,7 @@ void setup(void)
 {
 	Serial.begin(57600);
 
-  printf_begin();
+	printf_begin();
 
 	MCUCR = (1<<ISC01) | (1<<ISC00); //01 and 00 for triggering interrupts on change at low level
 	/*to test!*/
@@ -115,8 +115,8 @@ void loop(void)
 	rgbLed(LED_OFF);
 	sleepNow();
 }
+
 boolean returnBike(){
-	printf("test p:%d\n\r",BIKE_ID);
 	while(!rf_core->handShake()){
 		printf("Listening...\n\r");
 		delay(50); //wait for the handshake
@@ -142,195 +142,200 @@ boolean returnBike(){
 
 }
 boolean withdrawBike(){
+	/*
+	Returns true if the terminal accept the withdraw of the bike
+	( no timeout, rifd read correctly, and correct user code )
+	*/
 	rgbLed(LED_RED);
 	Serial.println("RFID READ");
 	if(!getRFID()) return false; //if we don't get the rfid code, failure
 
+		for(int i =0; i<6;i++){
+			Serial.print(client_rfid[i],HEX);
+		}
+		rgbLed(LED_YELLOW);
+		if(!getUserCode()) return false;//if we don't get the user code, failure
+			Serial.println("Introduced code");
+			for(int i =0; i<USER_CODE_LENGTH;i++){
+				Serial.print(user_code[i]);
+			}
+			Serial.println(' ');
+			Serial.println("Listening...");
+			while(!rf_core->handShake()){
+				delay(50); //wait for the handshake
+			}
+			printf("ID received:%lu\n\r",rf_core->getRemoteID());
+			data_buffer[0]=10;
+			rf_core->sendPacket(data_buffer); //send operation code
+			rf_core->sendPacket(client_rfid); //send RFID customer
+			rf_core->sendPacket(user_code); //send customer code
+			delay(100);//wait data
+
+			if(!rf_core->getNextPacket(data_buffer)) return false; // if not received package return false - set the returned data into data
+				rf_core->toDebug(); // to del
+				bool withdraw_accepted=true;
+				for(int i = 0; i<6;i++){
+					Serial.println(data_buffer[i]==200);
+					withdraw_accepted &= (data_buffer[i]==200);
+				}
+				if(withdraw_accepted){
+					Serial.println("withdraw accepted");
+					rgbLed(LED_GREEN);
+					return true;
+				}
+				return false;
+			}
+
+			void rgbLed(byte color)
+			{
+				switch (color) {
+					case LED_OFF:
+					// Off (all LEDs off):
+					digitalWrite(RED_PIN, LOW);
+					digitalWrite(GREEN_PIN, LOW);
+					digitalWrite(BLUE_PIN, LOW);
+					break;
+					case LED_RED:
+					// Red (turn just the red LED on):
+					digitalWrite(RED_PIN, HIGH);
+					digitalWrite(GREEN_PIN, LOW);
+					digitalWrite(BLUE_PIN, LOW);
+					break;
+					case LED_GREEN:
+					// Green (turn just the green LED on):
+					digitalWrite(RED_PIN, LOW);
+					digitalWrite(GREEN_PIN, HIGH);
+					digitalWrite(BLUE_PIN, LOW);
+					break;
+					case LED_YELLOW:
+					// Yellow (turn red and green on):
+					digitalWrite(RED_PIN, HIGH);
+					digitalWrite(GREEN_PIN, HIGH);
+					digitalWrite(BLUE_PIN, LOW);
+					break;
+					default:
+					// Off (all LEDs off):
+					digitalWrite(RED_PIN, LOW);
+					digitalWrite(GREEN_PIN, LOW);
+					digitalWrite(BLUE_PIN, LOW);
+				}
+			}
+
+			boolean getRFID(){
+				int actual_time= millis();
+				int initial_time = actual_time;
+				boolean received = false;
+				while((actual_time-initial_time) < RFID_TIMEOUT && !received) {
+					received = rfid.RFIDRead(&client_rfid[0]);
+					actual_time = millis();
+					delay(50);
+				}
+				return received;
+			}
+
+			boolean getUserCode(){
+				int button_state1=LOW,button_state2=LOW,index_key=0;
+				int actual_time= millis();
+				int initial_time = actual_time;
+				boolean buttons_released =false;
+				while((actual_time-initial_time) < USER_CODE_TIMEOUT && index_key < USER_CODE_LENGTH){
+					actual_time = millis();
+					button_state1 = digitalRead(BUTTON_PIN1);
+					button_state2 = digitalRead(BUTTON_PIN2);
+
+					if(button_state1== LOW && button_state2 == LOW){ // if both buttons are released
+						buttons_released = true;
+						digitalWrite(BUTTON_PIN1,LOW);
+
+					}
+					//check if user has released the buttons and if only one is pressed
+					else if(buttons_released && (button_state1== HIGH ^ button_state2 == HIGH))
+					{
+						// verify which button is pressed and if not both are pressed
+						Serial.println("INSIDE!");
+						if (button_state1 == HIGH && button_state2 == LOW) {
+							Serial.println("INSIDE 1!");
+							user_code[index_key] = 1;
+							index_key++;
+							delay(200); //to avoid contact bounce
+						}
+						else if(button_state2 == HIGH && button_state1 == LOW){
+							Serial.println("INSIDE 2!");
+							user_code[index_key] = 2;
+							index_key++;
+							delay(200); //to avoid contact bounce
+						}
+						buttons_released = false;
+
+					}
+				}
+				return (index_key == USER_CODE_LENGTH);
+			}
+
+
+			ISR(PCINT1_vect) { //WARNING: comment the ISR(PCINT1_vect) definition in SofwareSerial.cpp
+				switchButtonsInterrupts(false); //disable interrupt on buttons, arduino is awake, that avoid the interrupt to fire after wake.
+			}
+
+			void switchButtonsInterrupts(boolean on){ //TRUE for ON, FALSE for off
+				/* Pin to interrupt map:
+				* D0-D7 = PCINT 16-23 = PCIE2 = pcmsk2
+				* D8-D13 = PCINT 0-5 = PCIE0 = pcmsk0
+				* A0-A5 (D14-D19) = PCINT 8-13 = PCIE1 = pcmsk1*/
+				//interrupt on analog PIN A0 y A1
+				if(on){ //enable interrupts
+					PCICR |= (1<<PCIE1);
+					PCMSK1 |= (1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
+					PCMSK1 |= (1<<PCINT9); //9 for A1
+				}
+				else{//disable interrupts
+					PCICR &= ~(1<<PCIE1);
+					PCMSK1 &= ~(1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
+					PCMSK1 &= ~(1<<PCINT9); //9 for A1
+				}
+			}
+			//http://donalmorrissey.blogspot.com.es/2010/04/putting-arduino-diecimila-to-sleep.html
+			void sleepNow()
+			{
+				switchButtonsInterrupts(true);
+				delay(100);
+				// Choose our preferred sleep mode:
+				set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+				//
+				//interrupts();
+				//
+				// Set sleep enable (SE) bit:
+				sleep_enable();
+				//
+				// Put the device to sleep:
+				digitalWrite(13,LOW);   // turn LED off to indicate sleep
+				sleep_mode();
+				//
+				// Upon waking up, sketch continues from this point.
+
+				sleep_disable();
+				digitalWrite(13,HIGH);   // turn LED on to indicate awake
+			}
+
+			/**void sendRFID(){
+			Radio.txMode(6);
+			Radio.data_buffer[0] = 42; //withdraw code
+			for(int i =0;i<6;i++){
+			Radio.data_buffer[i+1] = client_rfid[i]; //6 bytes of RFID
+			Serial.print(client_rfid[i]);
+			Serial.print(" ");
+		}
+		Radio.write();
+	}
+	//Radio.channel= 111;
+
+	/*	Radio.rxMode(1);
+
+	//WARNING: To flush the serial buffer at the end of complete transaction
+	if(rf_core->getNextPacket(&data_buffer[0])){
+	Serial.println("code received:");
 	for(int i =0; i<6;i++){
-		Serial.print(client_rfid[i],HEX);
-	}
-	rgbLed(LED_YELLOW);
-	if(!getUserCode()) return false;//if we don't get the user code, failure
-	Serial.println("Introduced code");
-	for(int i =0; i<USER_CODE_LENGTH;i++){
-		Serial.print(user_code[i]);
-	}
-	Serial.println(' ');
-	Serial.println("Listening...");
-	while(!rf_core->handShake()){
-		delay(50); //wait for the handshake
-	}
-	printf("ID received:%lu\n\r",rf_core->getRemoteID());
-	data_buffer[0]=10;
-	rf_core->sendPacket(data_buffer); //send operation code
-	rf_core->sendPacket(client_rfid); //send RFID customer
-	rf_core->sendPacket(user_code); //send customer code
-	delay(100);//wait data
-	if(!rf_core->getNextPacket(data_buffer)) return false;
-	rf_core->toDebug();
-	bool withdraw_accepted=true;
-	for(int i = 0; i<6;i++){
-		Serial.println(data_buffer[i]==200);
-		withdraw_accepted &= (data_buffer[i]==200);
-	}
-	if(withdraw_accepted){
-		Serial.println("withdraw accepted");
-		rgbLed(LED_GREEN);
-		return true;
-	}
-	return false;
-}
-
-void rgbLed(byte color)
-{
-	switch (color) {
-		case LED_OFF:
-		// Off (all LEDs off):
-		digitalWrite(RED_PIN, LOW);
-		digitalWrite(GREEN_PIN, LOW);
-		digitalWrite(BLUE_PIN, LOW);
-		break;
-		case LED_RED:
-		// Red (turn just the red LED on):
-		digitalWrite(RED_PIN, HIGH);
-		digitalWrite(GREEN_PIN, LOW);
-		digitalWrite(BLUE_PIN, LOW);
-		break;
-		case LED_GREEN:
-		// Green (turn just the green LED on):
-		digitalWrite(RED_PIN, LOW);
-		digitalWrite(GREEN_PIN, HIGH);
-		digitalWrite(BLUE_PIN, LOW);
-		break;
-		case LED_YELLOW:
-		// Yellow (turn red and green on):
-		digitalWrite(RED_PIN, HIGH);
-		digitalWrite(GREEN_PIN, HIGH);
-		digitalWrite(BLUE_PIN, LOW);
-		break;
-		default:
-		// Off (all LEDs off):
-		digitalWrite(RED_PIN, LOW);
-		digitalWrite(GREEN_PIN, LOW);
-		digitalWrite(BLUE_PIN, LOW);
-	}
-}
-
-boolean getRFID(){
-	int actual_time= millis();
-	int initial_time = actual_time;
-	boolean received = false;
-	while((actual_time-initial_time) < RFID_TIMEOUT && !received) {
-		received = rfid.RFIDRead(&client_rfid[0]);
-		actual_time = millis();
-		delay(50);
-	}
-	return received;
-}
-
-boolean getUserCode(){
-	int button_state1=LOW,button_state2=LOW,index_key=0;
-	int actual_time= millis();
-	int initial_time = actual_time;
-	boolean buttons_released =false;
-	while((actual_time-initial_time) < USER_CODE_TIMEOUT && index_key < USER_CODE_LENGTH){
-		actual_time = millis();
-		button_state1 = digitalRead(BUTTON_PIN1);
-		button_state2 = digitalRead(BUTTON_PIN2);
-
-		if(button_state1== LOW && button_state2 == LOW){ // if both buttons are released
-			buttons_released = true;
-			digitalWrite(BUTTON_PIN1,LOW);
-
-		}
-		//check if user has released the buttons and if only one is pressed
-		else if(buttons_released && (button_state1== HIGH ^ button_state2 == HIGH))
-		{
-			// verify which button is pressed and if not both are pressed
-			Serial.println("INSIDE!");
-			if (button_state1 == HIGH && button_state2 == LOW) {
-				Serial.println("INSIDE 1!");
-				user_code[index_key] = 1;
-				index_key++;
-				delay(200); //to avoid contact bounce
-			}
-			else if(button_state2 == HIGH && button_state1 == LOW){
-				Serial.println("INSIDE 2!");
-				user_code[index_key] = 2;
-				index_key++;
-				delay(200); //to avoid contact bounce
-			}
-			buttons_released = false;
-
-		}
-	}
-	return (index_key == USER_CODE_LENGTH);
-}
-
-
-ISR(PCINT1_vect) { //WARNING: comment the ISR(PCINT1_vect) definition in SofwareSerial.cpp
-	switchButtonsInterrupts(false); //disable interrupt on buttons, arduino is awake, that avoid the interrupt to fire after wake.
-}
-
-void switchButtonsInterrupts(boolean on){ //TRUE for ON, FALSE for off
-	/* Pin to interrupt map:
-	* D0-D7 = PCINT 16-23 = PCIE2 = pcmsk2
-	* D8-D13 = PCINT 0-5 = PCIE0 = pcmsk0
-	* A0-A5 (D14-D19) = PCINT 8-13 = PCIE1 = pcmsk1*/
-	//interrupt on analog PIN A0 y A1
-	if(on){ //enable interrupts
-		PCICR |= (1<<PCIE1);
-		PCMSK1 |= (1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
-		PCMSK1 |= (1<<PCINT9); //9 for A1
-	}
-	else{//disable interrupts
-		PCICR &= ~(1<<PCIE1);
-		PCMSK1 &= ~(1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
-		PCMSK1 &= ~(1<<PCINT9); //9 for A1
-	}
-}
-//http://donalmorrissey.blogspot.com.es/2010/04/putting-arduino-diecimila-to-sleep.html
-void sleepNow()
-{
-	switchButtonsInterrupts(true);
-	delay(100);
-	// Choose our preferred sleep mode:
-	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-	//
-	//interrupts();
-	//
-	// Set sleep enable (SE) bit:
-	sleep_enable();
-	//
-	// Put the device to sleep:
-	digitalWrite(13,LOW);   // turn LED off to indicate sleep
-	sleep_mode();
-	//
-	// Upon waking up, sketch continues from this point.
-
-	sleep_disable();
-	digitalWrite(13,HIGH);   // turn LED on to indicate awake
-}
-
-/**void sendRFID(){
-Radio.txMode(6);
-Radio.data_buffer[0] = 42; //withdraw code
-for(int i =0;i<6;i++){
-Radio.data_buffer[i+1] = client_rfid[i]; //6 bytes of RFID
-Serial.print(client_rfid[i]);
-Serial.print(" ");
-}
-Radio.write();
-}
-//Radio.channel= 111;
-
-/*	Radio.rxMode(1);
-
-//WARNING: To flush the serial buffer at the end of complete transaction
-if(rf_core->getNextPacket(&data_buffer[0])){
-Serial.println("code received:");
-for(int i =0; i<6;i++){
-Serial.print(data_buffer[i]);
+	Serial.print(data_buffer[i]);
 }
 Serial.print('\n');
 }
