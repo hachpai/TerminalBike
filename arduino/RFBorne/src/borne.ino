@@ -12,7 +12,7 @@ byte refused_code[6] = {100,100,100,100,100,100};
 // this prevents the compiler from optimizing it out as it is only
 // modified by the interrupt handler - a function that we never directly call
 
-uint64_t BORNE_ID=42;
+uint64_t BORNE_ID=0xE8E8F0F0E1LL;
 
 const byte WITHDRAW_CODE=10;
 const byte RETURN_CODE=20;
@@ -34,10 +34,11 @@ byte locker_code[6] = {1,0,0,1,1,0};
 //send formated datas to nodeJS/mongoDB
 
 void loop(void){
-	rf_core->toDebug();
-	printf("casser les couilles\n\r");
+	//rf_core->handShake();
 	while(!rf_core->handShake()){
+
 		printf("BROADCASTING...\n\r");
+
 		delay(50);
 	}
 

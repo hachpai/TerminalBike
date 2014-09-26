@@ -55,7 +55,7 @@ const byte LED_YELLOW=3;
 Rfid rfid(SERIAL_IN,SERIAL_OUT);
 RFCore * rf_core;
 
-uint64_t BIKE_ID = 142;
+uint64_t BIKE_ID = 0x000000002ALL;
 //byte client_rfid[6]={10,20,34,12,11,42};
 byte client_rfid[6] = {34,35,36,37,38,39};
 unsigned char data_buffer[6]= {0,0,0,0,0,0};
@@ -98,6 +98,7 @@ void setup(void)
 
 void loop(void)
 {
+	returnBike();
 	rf_core->toDebug();
 	switch(state){
 
@@ -132,11 +133,12 @@ void loop(void)
 	sleepNow();
 }
 boolean returnBike(){
-	Serial.println("Listening...");
+	printf("test p:%d\n\r",BIKE_ID);
 	while(!rf_core->handShake()){
+		printf("Listening...\n\r");
 		delay(50); //wait for the handshake
 	}
-	printf("ID received:%l\n",rf_core->getRemoteID());
+	printf("ID received:%llu\n",rf_core->getRemoteID());
 	data_buffer[0]=20;
 	rf_core->sendPacket(data_buffer); //send operation code
 	rf_core->sendPacket(client_rfid); //send RFID customer, backup in the client_rfid array from withdraw transaction
@@ -175,7 +177,7 @@ boolean withdrawBike(){
 	while(!rf_core->handShake()){
 		delay(50); //wait for the handshake
 	}
-	printf("ID received:%lu\n",rf_core->getRemoteID());
+	printf("ID received:%lu\n\r",rf_core->getRemoteID());
 	data_buffer[0]=10;
 	rf_core->sendPacket(data_buffer); //send operation code
 	rf_core->sendPacket(client_rfid); //send RFID customer

@@ -12,17 +12,30 @@
 
 /**PIN MAP
 
-GND	 GND
-3V3	 3V3
-CE	 9
-CSN	 10
-SCK	 13
-MOSI	 11
-MISO	 12
+2 4 6 8 10
+1 3 5 7 9
+    _
+
+GND 2->GND
+3V3	 1->3V3
+CE 5->9
+CSN	 10->10
+SCK	 9->13
+MOSI	 8->11
+MISO	 7->12
+
 **/
 
 #define STACK_SIZE 6
-#define PACKET_SIZE 7 // size of the data part, 7 bytes: [NUM_PACKET,7 bytes of data]
+#define PAYLOAD_SIZE 8 // size of the data part, 9 bytes: [NUM_PACKET,8 bytes of data]
+/*Communication sequence:
+TERMINAL: broadcast his adress (uint64_t) on channel 1, 8 bytes of data
+BIKE: when address received, send his own address (uint64_t)
+(Terminal: send autorisation back)
+bike send RFID (uint8 *5)
+bike send user code (uint8_t)
+terminal send YES or NO
+*/
 
 
 #define TIMEOUT_DELAY 2000
