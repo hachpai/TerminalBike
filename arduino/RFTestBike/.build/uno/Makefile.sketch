@@ -1,0 +1,14 @@
+
+
+
+
+
+.build/uno/src/bike.cpp : src/bike.ino
+	@mkdir -p .build/uno/src
+	@echo [93msrc/bike.ino[0m
+	@/usr/local/bin/ino preproc  -o $@ $^
+
+
+all : .build/uno/src/bike.cpp
+	@true
+
