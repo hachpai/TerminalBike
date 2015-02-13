@@ -69,7 +69,7 @@ void RFCore::endOfSession(){
 
 
 bool RFCore::handShake(){
-
+  
 }
 
 bool RFCore::rangeTest()
@@ -95,8 +95,11 @@ bool RFCore::rangeTest()
       while(radio.available())
       {
         radio.read( &ack_received, sizeof(ack_received));
+        if(strcmp(ack_received,range_successful_ack)==0){
         printf("Got response %s\n\r",ack_received);
         return true;
+      }
+
       }
 
     }
@@ -104,7 +107,7 @@ bool RFCore::rangeTest()
   }
   else
   {
-    byte pipeNo;
+    uint8_t pipeNo;
     uint64_t bike_id_received;
     byte gotByte; // Dump the payloads until we've gotten everything
     if(!radio.available())
@@ -117,7 +120,7 @@ bool RFCore::rangeTest()
       while( radio.available(&pipeNo))
       {
         radio.read( &bike_id_received, sizeof(int) );
-        printf("Got data %d from pipe %d \n\r",bike_id_received,pipeNo);
+        printf("Got data %d from pipe %u \n\r",bike_id_received,pipeNo);
         radio.writeAckPayload(range_test_pipe.terminal,&range_successful_ack, sizeof(range_successful_ack));
       }
       return true;
