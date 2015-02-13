@@ -55,7 +55,7 @@ class RFCore
     bool getPacket(unsigned char *packet);
     void debug();
   private:
-    static void messageReceived(void);
+    static void check_radio(void);
 };
 
 #endif

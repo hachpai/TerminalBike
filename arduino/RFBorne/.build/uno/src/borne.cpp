@@ -24,8 +24,11 @@ void setup(void)
 }
 
 void loop(){
-  bool range = rf_core->rangeTest();
-  printf("RANGE TEST: %d \n\r",range);
+  bool terminal_in_range = rf_core->handShake();
+  if(terminal_in_range)
+  {
+    printf("Terminal in range!\n\r");
+  }
 
   delay(200);
 }
