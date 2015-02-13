@@ -4,14 +4,14 @@
 RF24 radio(9,10);
 
 //const uint64_t start_bike_pipe = [0xBBBBABCD71LL,0xBBBBABCD71LL+1];
-#define range_test_pipe_def 0xBBBBABCD01LL //0xBBBBABCD71LL
-#define handshake_pipe_def 0x0000000010LL
-#define start_bike_pipe 0x0000000004LL
+#define range_test_pipes_def 0xBBBBABCD01LL //0xBBBBABCD71LL
+#define handshake_pipe_def 0xBBBBABCD03LL
+#define start_bike_pipe 0xBBBBABCD05LL
 
 struct Pipe {
   uint64_t terminal;
   uint64_t bike;
-}range_test_pipe;
+}range_test_pipes, handshake_pipes;
 
 //const uint64_t handshake_pipe = [0x544d52687CLL,0x544d52687CLL+1];
 
@@ -23,28 +23,33 @@ int id;
 
 RFCore::RFCore(int _id, bool _is_terminal) //we could dynamically allocate arrays to enlarge lib capacity
 {
-  range_test_pipe.terminal = range_test_pipe_def;
-  range_test_pipe.bike = range_test_pipe_def+ 1;
+  range_test_pipes.terminal = range_test_pipes_def;
+  range_test_pipes.bike = range_test_pipes_def+ 1;
+  handshake_pipes.terminal = handshake_pipe_def;
+  handshake_pipes.bike = handshake_pipe_def+1;
+
   id = _id;
   is_terminal = _is_terminal;
   // Setup and configure rf radio
   radio.begin();
   radio.setAutoAck(1); // Ensure autoACK is enabled
-  radio.enableAckPayload(); // Allow optional ack payloads
+  //radio.enableAckPayload(); // Allow optional ack payloads
   //radio.setRetries(0,15); // Smallest time between retries, max no. of retries
   //8*8 bytes of data, meaning 8 integers
   radio.setPayloadSize(sizeof(uint64_t));
   radio.setRetries(15,15);
   if(!is_terminal) {
-    radio.openWritingPipe(range_test_pipe.terminal);
-    radio.openReadingPipe(1,range_test_pipe.bike);
+    radio.openWritingPipe(range_test_pipes.terminal);
+    radio.openReadingPipe(1,range_test_pipes.bike);
+    radio.openReadingPipe(2,start_bike_pipe+id);
   } else {
-    radio.openWritingPipe(range_test_pipe.bike);
-    radio.openReadingPipe(1,range_test_pipe.terminal);
+    radio.openWritingPipe(range_test_pipes.bike);
+    radio.openReadingPipe(1,range_test_pipes.terminal);
+    radio.openReadingPipe(2,handshake_pipes.terminal);
   }
 
   if(is_terminal){
-    radio.writeAckPayload(range_test_pipe.terminal,&range_successful_ack, sizeof(range_successful_ack) );
+    //radio.writeAckPayload(range_test_pipes.terminal,&range_successful_ack, sizeof(range_successful_ack) );
     radio.startListening(); // Start listening
   }
   radio.printDetails(); // Dump the configuration of the rf unit for debugging
@@ -69,7 +74,73 @@ void RFCore::endOfSession(){
 
 
 bool RFCore::handShake(){
-  
+  if (!is_terminal)
+  {
+    char data_received[3];
+    radio.stopListening();
+    radio.openWritingPipe(handshake_pipes.terminal);
+    if (!radio.write( &id, sizeof(int)))
+    {
+      printf("write timeout.\n\r");
+      //return false;
+    }
+    else{
+      radio.startListening();
+      delay(50);
+      if(!radio.available())
+      {
+        printf("Nothing received\n\r");
+      }
+      else
+      {
+        while(radio.available())
+        {
+          radio.read( &data_received, sizeof(data_received));
+          if(strcmp(data_received,range_successful_ack)==0)
+          {
+            printf("Got response %s\n\r",data_received);
+            return true;
+          }
+
+        }
+
+      }
+
+    }
+    return false;
+
+  }
+  else
+  {
+    int data_received;
+    radio.startListening();
+    delay(50);
+    if(!radio.available())
+    {
+      printf("Nothing received terminal\n\r");
+    }
+    else
+    {
+      while(radio.available())
+      {
+        radio.read( &data_received, sizeof(data_received));
+
+        printf("Got response %s\n\r",data_received);
+      }
+
+      radio.stopListening();
+      radio.openWritingPipe(start_bike_pipe+data_received);
+      if(!radio.write(&range_successful_ack, sizeof(range_successful_ack))){
+        printf("bike didn't received\n\r");
+      }
+      else{
+        printf("bike received confirmation code\n\r");
+        return true;
+      }
+
+    }
+    return false;
+  }
 }
 
 bool RFCore::rangeTest()
@@ -95,10 +166,11 @@ bool RFCore::rangeTest()
       while(radio.available())
       {
         radio.read( &ack_received, sizeof(ack_received));
-        if(strcmp(ack_received,range_successful_ack)==0){
-        printf("Got response %s\n\r",ack_received);
-        return true;
-      }
+        if(strcmp(ack_received,range_successful_ack)==0)
+        {
+          printf("Got response %s\n\r",ack_received);
+          return true;
+        }
 
       }
 
@@ -121,7 +193,7 @@ bool RFCore::rangeTest()
       {
         radio.read( &bike_id_received, sizeof(int) );
         printf("Got data %d from pipe %u \n\r",bike_id_received,pipeNo);
-        radio.writeAckPayload(range_test_pipe.terminal,&range_successful_ack, sizeof(range_successful_ack));
+        radio.writeAckPayload(range_test_pipes.terminal,&range_successful_ack, sizeof(range_successful_ack));
       }
       return true;
     }

@@ -27,7 +27,7 @@ void setup(void)
 }
 
 void loop(){
-  terminal_in_range = rf_core->rangeTest();
+  terminal_in_range = rf_core->handShake();
   if(terminal_in_range)
   {
     printf("Terminal in range!\n\r");
