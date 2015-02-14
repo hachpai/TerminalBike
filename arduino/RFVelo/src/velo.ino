@@ -18,11 +18,18 @@ void setup(void)
 }
 
 void loop(){
-  terminal_in_range = rf_core->handShake();
+  terminal_in_range = rf_core->rangeTest();
   if(terminal_in_range)
   {
     printf("Terminal in range!\n\r");
-  }
+    delay(500);
+    if(rf_core->handShake()){
 
-  delay(200);
+      printf("success handshake!\n\r");
+      rf_core->closeSession();
+      rf_core->printSessionCounter();
+    }
+
+  }
+  delay(500);
 }

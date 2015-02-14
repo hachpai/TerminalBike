@@ -1,13 +1,16 @@
 #include "RFCore.h"
 
-
+volatile uint8_t in_session=false;
+volatile boolean success_range = false;
+volatile int session_counter=0;
 RF24 radio(9,10);
 
+const int TIMEOUT=3000;
 //const uint64_t start_bike_pipe = [0xBBBBABCD71LL,0xBBBBABCD71LL+1];
 #define range_test_pipes_def 0xBBBBABCD01LL //0xBBBBABCD71LL
 #define handshake_pipe_def 0xBBBBABCD03LL
 #define start_bike_pipe 0xBBBBABCD05LL
-
+#define terminal_session_pipe 0xBBBBABCD07LL //for sessions pair to pair communication
 struct Pipe {
   uint64_t terminal;
   uint64_t bike;
@@ -17,9 +20,11 @@ struct Pipe {
 
 bool is_terminal;
 
-char range_successful_ack[]  = "OK";
+char success_code[]  = "OK";
+char busy_code[] = "KO";
 
 int id;
+void printPipe();
 
 RFCore::RFCore(int _id, bool _is_terminal) //we could dynamically allocate arrays to enlarge lib capacity
 {
@@ -38,21 +43,33 @@ RFCore::RFCore(int _id, bool _is_terminal) //we could dynamically allocate array
   //8*8 bytes of data, meaning 8 integers
   radio.setPayloadSize(sizeof(uint64_t));
   radio.setRetries(15,15);
-  if(!is_terminal) {
-    radio.openWritingPipe(range_test_pipes.terminal);
-    radio.openReadingPipe(1,range_test_pipes.bike);
-    radio.openReadingPipe(2,start_bike_pipe+id);
-  } else {
-    radio.openWritingPipe(range_test_pipes.bike);
-    radio.openReadingPipe(1,range_test_pipes.terminal);
-    radio.openReadingPipe(2,handshake_pipes.terminal);
+  radio.maskIRQ(1,1,0);
+  radio.setChannel(60);
+  radio.setPALevel(RF24_PA_LOW);
+  radio.setDataRate(RF24_250KBPS);
+
+  if(is_terminal) {
+    radio.openReadingPipe(1,range_test_pipes.terminal); //for range testing queries
+    radio.openReadingPipe(2,handshake_pipes.terminal); //for handshake queries
+    radio.openReadingPipe(3,terminal_session_pipe); //for sessions
+  } else { //bike
+    radio.openWritingPipe(range_test_pipes.terminal); //bike is always the first to talk
+    //radio.openReadingPipe(1,range_test_pipes.bike); //only for ackpayload?
+    radio.openReadingPipe(1,start_bike_pipe+id);
+    //radio.openReadingPipe(2,start_bike_pipe+id);
   }
 
   if(is_terminal){
-    //radio.writeAckPayload(range_test_pipes.terminal,&range_successful_ack, sizeof(range_successful_ack) );
+    //radio.writeAckPayload(range_test_pipes.terminal,&success_code_ack, sizeof(success_code_ack) );
     radio.startListening(); // Start listening
   }
+
+
   radio.printDetails(); // Dump the configuration of the rf unit for debugging
+  if(is_terminal){//only the terminal listen passively to radio
+    attachInterrupt(0, check_radio, LOW);
+  }
+
 }
 
 bool RFCore::sendPacket(unsigned char *packet){
@@ -74,67 +91,82 @@ void RFCore::endOfSession(){
 
 
 bool RFCore::handShake(){
-  if (!is_terminal)
+
+  char data_received[3];
+  radio.stopListening();
+  radio.openWritingPipe(handshake_pipe_def);
+  if (!radio.write( &id, sizeof(int)))
   {
-    char data_received[3];
-    radio.stopListening();
-    radio.openWritingPipe(handshake_pipes.terminal);
-    if (!radio.write( &id, sizeof(int)))
-    {
-      printf("write timeout.\n\r");
-      //return false;
-    }
-    else{
-      radio.startListening();
-      delay(50);
-      if(!radio.available())
-      {
-        printf("Nothing received\n\r");
-      }
-      else
-      {
-        while(radio.available())
-        {
-          radio.read( &data_received, sizeof(data_received));
-          if(strcmp(data_received,range_successful_ack)==0)
-          {
-            printf("Got response %s\n\r",data_received);
-            return true;
-          }
-
-        }
-
-      }
-
-    }
+    printf("write timeout while handshaking.\n\r");
     return false;
-
   }
-  else
-  {
-    int data_received;
+  else{
     radio.startListening();
     delay(50);
     if(!radio.available())
     {
-      printf("Nothing received terminal\n\r");
+      printf("Nothing received\n\r");
+      return false;
     }
     else
     {
       while(radio.available())
       {
+        char data_received[3];
         radio.read( &data_received, sizeof(data_received));
+        if(strcmp(data_received,success_code)==0)
+        {
+          printf("Got response in HANDSHAKE %s\n\r",data_received);
+          in_session= true;
+        }
 
-        printf("Got response %s\n\r",data_received);
       }
 
+    }
+
+  }
+  return in_session;
+}
+
+bool RFCore::rangeTest()
+{
+  if (!is_terminal)
+  {
+    radio.stopListening(); // First, stop listening so we can talk.
+    radio.openWritingPipe(range_test_pipes.terminal);
+    bool ping_pong=false;
+    printf("Range testing...");
+    int time_start=millis();
+    while(!ping_pong)
+    {
+      int time_now = millis();
+      if((time_now-time_start) > TIMEOUT){
+        printf("TIMEOUT\n\r");
+        return false;
+      }
       radio.stopListening();
-      radio.openWritingPipe(start_bike_pipe+data_received);
-      if(!radio.write(&range_successful_ack, sizeof(range_successful_ack))){
-        printf("bike didn't received\n\r");
+      radio.write( &id, sizeof(int));
+      radio.startListening();
+      delay(20);
+      if(!radio.available())
+      {
+
+        printf(".");
+
       }
       else{
-        printf("bike received confirmation code\n\r");
+        ping_pong=true;
+      }
+
+    }
+    printf("\n\r");
+    while(radio.available())
+    {
+      char response[3];
+
+      radio.read( &response, sizeof(response));
+      if(strcmp(response,success_code)==0 || strcmp(response,busy_code)==0){//terminal reply with a busy or free code, range passed
+        printf("Well received in range test:%s\n\r",response);
         return true;
       }
 
@@ -143,70 +175,125 @@ bool RFCore::handShake(){
   }
 }
 
-bool RFCore::rangeTest()
+void RFCore::closeSession(){
+  session_counter++;
+  uint8_t closing_session_code[8];
+  closing_session_code[0]= 'L';
+  closing_session_code[1]= 'O';
+  radio.stopListening();
+  radio.openWritingPipe(terminal_session_pipe);
+  printf("closing session...");
+
+  while(!radio.write(&closing_session_code,sizeof(closing_session_code))){
+    printf(".");
+    delay(50);
+  }
+  printf("\n\r");
+}
+
+void RFCore::printSessionCounter()
 {
-  if (!is_terminal)
-  {
-    char ack_received[3];
-    radio.stopListening(); // First, stop listening so we can talk.
-    printf("Now sending %d as payload. ",id);
-    delay(20);
-    if (!radio.write( &id, sizeof(int)))
-    {
-      printf("write timeout.\n\r");
-      //return false;
-    }
+  printf("Session Counter: %d \n\r",session_counter);
+}
 
-    if(!radio.available())
+
+void RFCore::check_radio(void)
+{
+
+  bool tx,fail,rx;
+  radio.whatHappened(tx,fail,rx);                     // What happened?
+
+  if(rx){
+    uint8_t pipe_number;
+
+    while( radio.available(&pipe_number))
     {
-      printf("Nothing received\n\r");
-    }
-    else
-    {
-      while(radio.available())
-      {
-        radio.read( &ack_received, sizeof(ack_received));
-        if(strcmp(ack_received,range_successful_ack)==0)
-        {
-          printf("Got response %s\n\r",ack_received);
-          return true;
+      //last_pipe= pipeNo;
+
+      switch(pipe_number){
+        case 1: //range_test pipe
+        if(is_terminal){
+          int id;
+          radio.read(&id,sizeof(int));
+          radio.stopListening();
+          radio.openWritingPipe(start_bike_pipe+id);
+          //printf("id received:%d",id);
+          if(in_session){
+            radio.write(&busy_code,sizeof(busy_code)); //send the bike that the terminal is busy
+          }
+          else{ //terminal is busy
+            radio.write(&success_code,sizeof(success_code));
+          }
+          radio.startListening();
         }
+        break;
+        case 2: //handshake pipe (init session)
+        if(is_terminal){
 
-      }
+          int id;
+          radio.read(&id,sizeof(int));
+          radio.stopListening();
+          radio.openWritingPipe(start_bike_pipe+id);
+          if(in_session){
+            radio.write(&busy_code,sizeof(busy_code)); //send the bike that the terminal is busy
+          }
+          else{ //terminal accept a handshake
+            if(radio.write(&success_code,sizeof(success_code))){
+              in_session=true;
+            }
 
-    }
-    return false;
-  }
-  else
-  {
-    uint8_t pipeNo;
-    uint64_t bike_id_received;
-    byte gotByte; // Dump the payloads until we've gotten everything
-    if(!radio.available())
-    {
-      printf("No data received\n\r");
-      return false;
-    }
-    else
-    {
-      while( radio.available(&pipeNo))
-      {
-        radio.read( &bike_id_received, sizeof(int) );
-        printf("Got data %d from pipe %u \n\r",bike_id_received,pipeNo);
-        radio.writeAckPayload(range_test_pipes.terminal,&range_successful_ack, sizeof(range_successful_ack));
+          }
+          radio.startListening();
+          break;
+        }
+        case 3: //session pipe
+        uint8_t data[8]; //8 bytes = payload of uint64_t
+        radio.read(&data,sizeof(data));
+        if(data[0]=='L' && data[1]=='O'){
+          in_session=false;
+          session_counter++;
+        }
+        break;
+        radio.startListening();
+        //radio.read( &bike_id_received, sizeof(int) );
       }
-      return true;
+      //return true;
     }
   }
+  /*bool tx,fail,rx;
+  radio.whatHappened(tx,fail,rx);                     // What happened?
+
+  // If data is available, handle it accordingly
+  if ( rx ){
+
+  if(radio.getDynamicPayloadSize() < 1){
+  // Corrupt payload has been flushed
+  return;
+}
+// Read in the data
+uint8_t received;
+radio.read(&received,sizeof(received));
+// If this is a ping, send back a pong
+if(received == ping){
+radio.stopListening();
+// Can be important to flush the TX FIFO here if using 250KBPS data rate
+//radio.flush_tx();
+radio.startWrite(&pong,sizeof(pong),0);
+}else
+// If this is a pong, get the current micros()
+if(received == pong){
+round_trip_timer = micros() - round_trip_timer;
+Serial.print(F("Received Pong, Round Trip Time: "));
+Serial.println(round_trip_timer);
+}
+}
+// Start listening if transmission is complete
+if( tx || fail ){
+radio.startListening();
+Serial.println(tx ? F("Send:OK") : F("Send:Fail"));
+}*/
 }
 
-
-
-
-
-void RFCore::messageReceived(void){
-
-}
 
 void RFCore::debug(){ //WARNING: this functions introduce strange effect, see history file.
   /*Serial.println("-------RF DEBUG-----------");
