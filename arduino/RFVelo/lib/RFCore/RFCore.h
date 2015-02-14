@@ -10,11 +10,17 @@
 #define CE_PIN   9
 #define CSN_PIN 10
 
-/**PIN MAP
+/**PIN MAP (Male)
 
 2 4 6 8 10
 1 3 5 7 9
     _
+
+
+PIN MAP (Female)
+10 8 6 4 2
+9  7 5 3 1
+     _
 
 GND 2->GND
 3V3	 1->3V3
