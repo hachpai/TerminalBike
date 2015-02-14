@@ -1,299 +1,316 @@
 #include "RFCore.h"
 
-int PACKET_SIZE = PAYLOAD_SIZE+1;
-unsigned char tx_data[STACK_SIZE*PAYLOAD_SIZE];
-unsigned char rx_data[STACK_SIZE*PAYLOAD_SIZE];
-
+volatile uint8_t in_session=false;
+volatile boolean success_range = false;
+volatile int session_counter=0;
 RF24 radio(9,10);
 
+const int TIMEOUT=3000;
+//const uint64_t start_bike_pipe = [0xBBBBABCD71LL,0xBBBBABCD71LL+1];
+#define range_test_pipes_def 0xBBBBABCD01LL //0xBBBBABCD71LL
+#define handshake_pipe_def 0xBBBBABCD03LL
+#define start_bike_pipe 0xBBBBABCD05LL
+#define terminal_session_pipe 0xBBBBABCD07LL //for sessions pair to pair communication
+struct Pipe {
+  uint64_t terminal;
+  uint64_t bike;
+}range_test_pipes, handshake_pipes;
 
-unsigned char data[PAYLOAD_SIZE]; // the char arrays to write and read data through radio, 7 bytes of payload, one of PCK_ID
+//const uint64_t handshake_pipe = [0x544d52687CLL,0x544d52687CLL+1];
 
+bool is_terminal;
 
-uint64_t local_id = 0x0000000000LL;
-uint64_t DEFAULT_REMOTE_ADDRESS = 0x0000000000LL;
-volatile uint64_t remote_id = DEFAULT_REMOTE_ADDRESS;
+char success_code[]  = "OK";
+char busy_code[] = "KO";
 
-//for channel preferences: http://nrqm.ca/nrf24l01/firmware/rf_ch-register/
-const unsigned char CHANNEL_BROADCAST = 101;
-const unsigned char CHANNEL_COM = 115;
-unsigned char channel=CHANNEL_BROADCAST;
-bool bc_initializer = false;
+int id;
+void printPipe();
 
-int tx_index=0;
-int rx_index=0; //index of the last packet received and correctly read.
-volatile bool packets_status[STACK_SIZE];
-
-//DEBUG VARIABLES
-volatile int received_packet_counter = 0;
-volatile int packet_missed_counter=0;
-String pck_seq="RECEIVED PACKET SEQ:";
-String data_rcv_seq="RECEIVED DATA SEQ:";
-String data_send_log="DATA SEND LOG:";
-//End debug
-
-RFCore::RFCore(uint64_t id, bool bc_in) //we could dynamically allocate arrays to enlarge lib capacity
+RFCore::RFCore(int _id, bool _is_terminal) //we could dynamically allocate arrays to enlarge lib capacity
 {
+  range_test_pipes.terminal = range_test_pipes_def;
+  range_test_pipes.bike = range_test_pipes_def+ 1;
+  handshake_pipes.terminal = handshake_pipe_def;
+  handshake_pipes.bike = handshake_pipe_def+1;
 
+  id = _id;
+  is_terminal = _is_terminal;
+  // Setup and configure rf radio
   radio.begin();
-  for(int i =0; i<STACK_SIZE*PAYLOAD_SIZE; i++){
-    tx_data[i]=0; //initializing the TX array
-    rx_data[i]=0; //initializing the RX array
-  }
-  for(int i =0; i<STACK_SIZE; i++){
-    packets_status[i]=false;
-  }
-  local_id=id;
-  radio.setPALevel(RF24_PA_MAX);
-  // 8 bits CRC
-  radio.setCRCLength( RF24_CRC_8 ) ;
-  // Enabling hardware ACK
-  //radio.enableAckPayload();
-  radio.setAutoAck(false);
-
-  // optionally, increase the delay between retries & # of retries
-  //radio.setRetries(15,15);
-
-  //set the payload for the chip
-  radio.setPayloadSize(PACKET_SIZE);
+  radio.setAutoAck(1); // Ensure autoACK is enabled
+  //radio.enableAckPayload(); // Allow optional ack payloads
+  //radio.setRetries(0,15); // Smallest time between retries, max no. of retries
+  //8*8 bytes of data, meaning 8 integers
+  radio.setPayloadSize(sizeof(uint64_t));
+  radio.setRetries(15,15);
+  radio.maskIRQ(1,1,0);
+  radio.setChannel(60);
+  radio.setPALevel(RF24_PA_LOW);
   radio.setDataRate(RF24_250KBPS);
 
-  changeChannel(CHANNEL_BROADCAST);
-  radio.startListening();
-  attachInterrupt(0, RFCore::messageReceived, FALLING);  // look for rising edges on digital pin 2
-  bc_initializer = bc_in;
-  //for pipes explanations:http://maniacalbits.blogspot.be/2013/04/rf24-avoiding-rx-pipe-0-for-enhanced.html
-  if(bc_initializer){
-    radio.openReadingPipe(1,local_id); // For broadcasting, RF card can have it's own address. Once the other has it, it can target it.
-    radio.openWritingPipe( 0x0000000000LL);
+  if(is_terminal) {
+    radio.openReadingPipe(1,range_test_pipes.terminal); //for range testing queries
+    radio.openReadingPipe(2,handshake_pipes.terminal); //for handshake queries
+    radio.openReadingPipe(3,terminal_session_pipe); //for sessions
+  } else { //bike
+    radio.openWritingPipe(range_test_pipes.terminal); //bike is always the first to talk
+    //radio.openReadingPipe(1,range_test_pipes.bike); //only for ackpayload?
+    radio.openReadingPipe(1,start_bike_pipe+id);
+    //radio.openReadingPipe(2,start_bike_pipe+id);
   }
-  else radio.openReadingPipe(1, 0x0000000000LL); // For receiving broadcasting handshake, card remain on local address 0. All bike wait terminal born on address 0.
+
+  if(is_terminal){
+    //radio.writeAckPayload(range_test_pipes.terminal,&success_code_ack, sizeof(success_code_ack) );
+    radio.startListening(); // Start listening
+  }
 
 
+  radio.printDetails(); // Dump the configuration of the rf unit for debugging
+  if(is_terminal){//only the terminal listen passively to radio
+    attachInterrupt(0, check_radio, LOW);
+  }
 
 }
 
-void RFCore::sendPacket(unsigned char *packet){
-  radio.stopListening();
+bool RFCore::sendPacket(unsigned char *packet){
+  //radio.stopListening();
   //IMPORTANT:putting the RF chip in txmode avoid an rx interrupt, resulting in inchorent data in data
   //(interruption of the for)
-  data[0]=tx_index; //the number of packet
-  for (int i=0; i<PAYLOAD_SIZE; i++) {
-    tx_data[(tx_index*PAYLOAD_SIZE)+i]=packet[i]; //backup the packet in the tx_data stack
-    data[i+1] = packet[i];
-    //packet[i]=0; don't know if we must do that...
-    data_send_log += String(data[i+1]);
-  }
-  tx_index++;
-  bool ok = radio.write( &data, PACKET_SIZE);
-  ; //get back in reception. RX interruptions occur again.
-  delay(100); // to let the time at the other arduino to treat the datas
+
+  //radio.startWrite( &data[0], sizeof(unsigned char) ,0);
+  // to let the time at the other arduino to treat the datas
 }
 
-bool RFCore::getNextPacket(unsigned char *packet){
-  int initial_time = millis();
-  int current_time = initial_time;
-  while(!packets_status[rx_index] && (current_time - initial_time)<TIMEOUT_DELAY){ //while packet not received and timeout not reached
-    current_time = millis();
-    retransmissionQuery(rx_index);
-    delay(100); // wait the packet
-  }
-  if(!packets_status[rx_index]) return false; //packet not yet arrived, time out, return false
+bool RFCore::getPacket(unsigned char *packet){
+}
 
-    for(int i = 0;i<PAYLOAD_SIZE;i++){
-      packet[i]=rx_data[(rx_index*PAYLOAD_SIZE)+i];
-    }
-    rx_index++; // the packet is correctly transmit to the program.
-    return true;
-  }
 
-  void RFCore::retransmissionQuery(unsigned char pck_number){
-    Serial.print("ASKING for retransmission:");
-    Serial.println(pck_number);
-    radio.stopListening();
-    data[0]=255; //retransmission query code
-    data[1]=pck_number;
-    for(int i = 2;i<PAYLOAD_SIZE;i++){
-      data[i] = 0;
-    }
-    bool ok = radio.write( &data, PACKET_SIZE);
+void RFCore::endOfSession(){
+  //reset everything
+}
+
+
+bool RFCore::handShake(){
+
+  char data_received[3];
+  radio.stopListening();
+  radio.openWritingPipe(handshake_pipe_def);
+  if (!radio.write( &id, sizeof(int)))
+  {
+    printf("write timeout while handshaking.\n\r");
+    return false;
+  }
+  else{
     radio.startListening();
-  }
-
-  void RFCore::addTXPacket(unsigned char *new_packet,int num_packet){
-    for(int i = 0;i<PAYLOAD_SIZE;i++){
-      tx_data[(num_packet*PAYLOAD_SIZE)+i]=new_packet[i];
+    delay(50);
+    if(!radio.available())
+    {
+      printf("Nothing received\n\r");
+      return false;
     }
-  }
-  void RFCore::getTXPacket(unsigned char *packet,int num_packet){
-    for(int i = 0;i<PAYLOAD_SIZE;i++){
-      packet[i]=tx_data[(num_packet*PAYLOAD_SIZE)+i];
-    }
-  }
-
-  void RFCore::reset(){
-    for(int i =0; i<STACK_SIZE*PAYLOAD_SIZE; i++){
-      tx_data[i]=0; //reset buffer arrays
-      rx_data[i]=0;
-    }
-    for(int i =0; i<STACK_SIZE; i++){
-      packets_status[i]=false; //reset ACK
-    }
-    changeChannel(CHANNEL_BROADCAST);
-    radio.startListening();
-    if(bc_initializer){
-      radio.openWritingPipe(local_id);// For broadcasting, RF card can have it's own adress. Once the other has it, it can target it.
-    }
-    else radio.openWritingPipe(0); // For receiving broadcasting handshake, card remain on local address 0. All bike wait terminal born on address 0.
-    radio.openReadingPipe(1,0);
-    remote_id=0;
-    tx_index=0;
-    rx_index=0;
-
-    /*Reset debug var*/
-    received_packet_counter = 0;
-    packet_missed_counter=0;
-    pck_seq="RECEIVED PACKET SEQ:";
-    data_rcv_seq="RECEIVED DATA SEQ:";
-    data_send_log="DATA SEND LOG:";
-  }
-
-
-  bool RFCore::handShake(){
-
-    if (channel == CHANNEL_COM) return true; //if we've switched channel, it means that the handshake is done
-      if(remote_id !=DEFAULT_REMOTE_ADDRESS){
-        radio.openWritingPipe(remote_id);
-        if(!bc_initializer){ // it's the bike, it has received the terminal ID. It's its turn to send local address.
-          radio.stopListening();
-          radio.write(&local_id,sizeof(uint64_t)); // Send his bike ID to the terminal
-          printf("ID sended:%d\n",local_id);
-          radio.openReadingPipe(1,local_id); //bike can now be targeted by the terminal
+    else
+    {
+      while(radio.available())
+      {
+        char data_received[3];
+        radio.read( &data_received, sizeof(data_received));
+        if(strcmp(data_received,success_code)==0)
+        {
+          printf("Got response in HANDSHAKE %s\n\r",data_received);
+          in_session= true;
         }
-        changeChannel(CHANNEL_COM); //both change channel
-        radio.startListening(); //the passive mode, RX.
+
+      }
+
+    }
+
+  }
+  return in_session;
+}
+
+bool RFCore::rangeTest()
+{
+  if (!is_terminal)
+  {
+    radio.stopListening(); // First, stop listening so we can talk.
+    radio.openWritingPipe(range_test_pipes.terminal);
+    bool ping_pong=false;
+    printf("Range testing...");
+    int time_start=millis();
+    while(!ping_pong)
+    {
+      int time_now = millis();
+      if((time_now-time_start) > TIMEOUT){
+        printf("TIMEOUT\n\r");
+        return false;
+      }
+      radio.stopListening();
+      radio.write( &id, sizeof(int));
+      radio.startListening();
+      delay(20);
+      if(!radio.available())
+      {
+
+        printf(".");
+
+      }
+      else{
+        ping_pong=true;
+      }
+
+    }
+    printf("\n\r");
+    while(radio.available())
+    {
+      char response[3];
+
+      radio.read( &response, sizeof(response));
+      if(strcmp(response,success_code)==0 || strcmp(response,busy_code)==0){//terminal reply with a busy or free code, range passed
+        printf("Well received in range test:%s\n\r",response);
         return true;
       }
-  //    printf("step:%d",2);
 
-      changeChannel(CHANNEL_BROADCAST); //no connection established
-      if(bc_initializer){ //if it's the terminal
-        radio.stopListening(); //in transmission for broadcasting
-        radio.startWrite(&local_id,sizeof(uint64_t));//terminal broadcast its ID
-        printf("ID sended:%d\n\r",local_id);
-        radio.startListening();//in reception, wait for bike ID
-
-        delay(50);
-
-      }
-      else{ //it's the bike
-      radio.startListening();//in reception, wait for terminal ID
-      delay(200);
     }
     return false;
   }
+}
 
-  /*DEBUG FONCTIONS*/
+void RFCore::closeSession(){
+  session_counter++;
+  uint8_t closing_session_code[8];
+  closing_session_code[0]= 'L';
+  closing_session_code[1]= 'O';
+  radio.stopListening();
+  radio.openWritingPipe(terminal_session_pipe);
+  printf("closing session...");
 
-  uint64_t RFCore::getRemoteID(){
-    return remote_id;
+  while(!radio.write(&closing_session_code,sizeof(closing_session_code))){
+    printf(".");
+    delay(50);
   }
+  printf("\n\r");
+}
 
-  void RFCore::printSerialBuffers(){
-    Serial.print("TX BUFFER:");
-    for(int i =0; i<STACK_SIZE*PAYLOAD_SIZE; i++){
-      Serial.print(tx_data[i]);
-      Serial.print(' ');
-    }
-    Serial.println(' ');
-    Serial.print("RX BUFFER:");
-    for(int i =0; i<STACK_SIZE*PAYLOAD_SIZE; i++){
-      Serial.print(rx_data[i]);
-      Serial.print(' ');
-    }
-    Serial.println(' ');
-  }
-
-  void printBooleanACK(){
-    Serial.print("BOOL ACK:");
-    for(int i =0; i<STACK_SIZE; i++){
-      Serial.print(packets_status[i]);
-      Serial.print(' ');
-    }
-    Serial.println(' ');
-  }
-
-  void RFCore::changeChannel(int new_channel){
-    channel = new_channel;
-    radio.setChannel(new_channel);
-    delay(20);
-  }
+void RFCore::printSessionCounter()
+{
+  printf("Session Counter: %d \n\r",session_counter);
+}
 
 
-  void RFCore::messageReceived(void){
-    bool rx,tx,fail;
-    radio.whatHappened(tx,fail,rx);
-    //chip launch an IRQ for TX event. Need to check if it's an IRQ due to message received
-    if(rx){
-      printf("ici \n\r");
-      if (channel == CHANNEL_BROADCAST)
-        {
-          uint64_t received_address;
-          radio.read(&received_address,1); // the bike received the terminal ID.
-          printf("Recu: %d \n\r",received_address);
-          remote_id = received_address;
+void RFCore::check_radio(void)
+{
 
-        }
-        else if (channel == CHANNEL_COM){
-          radio.read(&data,PACKET_SIZE);
-          int packet_number = data[0];
-          //255 is reserved to announce a missing packet.
-          if(packet_number != 255){
-            received_packet_counter++; // for debug and stats
+  bool tx,fail,rx;
+  radio.whatHappened(tx,fail,rx);                     // What happened?
 
-            for (int i=0; i<PAYLOAD_SIZE; i++) {
-              rx_data[(packet_number*PAYLOAD_SIZE)+i]=data[i+1];
-              data_rcv_seq += String(data[i+1]);
-            }
-            pck_seq += String(packet_number);
-            packets_status[packet_number] = true;
+  if(rx){
+    uint8_t pipe_number;
+
+    while( radio.available(&pipe_number))
+    {
+      //last_pipe= pipeNo;
+
+      switch(pipe_number){
+        case 1: //range_test pipe
+        if(is_terminal){
+          int id;
+          radio.read(&id,sizeof(int));
+          radio.stopListening();
+          radio.openWritingPipe(start_bike_pipe+id);
+          //printf("id received:%d",id);
+          if(in_session){
+            radio.write(&busy_code,sizeof(busy_code)); //send the bike that the terminal is busy
           }
-          else{
-            //the other board ask for a packet retransmission
-            packet_missed_counter++; //for statistics
-            int pck_number_queried = data[1]; //format is retransmit code, packet to resend
-            radio.stopListening();
-            data[0] = pck_number_queried;
-            for(int i = 0;i<PAYLOAD_SIZE;i++){
-              data[i+1]=tx_data[(pck_number_queried*PAYLOAD_SIZE)+i];
-            }
-            radio.write(&data,PACKET_SIZE);
+          else{ //terminal is busy
+            radio.write(&success_code,sizeof(success_code));
           }
+          radio.startListening();
         }
+        break;
+        case 2: //handshake pipe (init session)
+        if(is_terminal){
+
+          int id;
+          radio.read(&id,sizeof(int));
+          radio.stopListening();
+          radio.openWritingPipe(start_bike_pipe+id);
+          if(in_session){
+            radio.write(&busy_code,sizeof(busy_code)); //send the bike that the terminal is busy
+          }
+          else{ //terminal accept a handshake
+            if(radio.write(&success_code,sizeof(success_code))){
+              in_session=true;
+            }
+
+          }
+          radio.startListening();
+          break;
+        }
+        case 3: //session pipe
+        uint8_t data[8]; //8 bytes = payload of uint64_t
+        radio.read(&data,sizeof(data));
+        if(data[0]=='L' && data[1]=='O'){
+          in_session=false;
+          session_counter++;
+        }
+        break;
+        radio.startListening();
+        //radio.read( &bike_id_received, sizeof(int) );
       }
-      radio.startListening();
+      //return true;
     }
+  }
+  /*bool tx,fail,rx;
+  radio.whatHappened(tx,fail,rx);                     // What happened?
 
-    void RFCore::toDebug(){ //WARNING: this functions introduce strange effect, see history file.
-      /*Serial.println("-------RF DEBUG-----------");
-      Serial.print("radio channel:");
-      Serial.println(radio.channel);
-      Serial.print("radio mode:");
-      Serial.println(radio.mode);
-      Serial.print("Local address:");
-      Serial.println(radio.localAddress);
-      Serial.print("Remote address:");
-      Serial.println(radio.remoteAddress);*/
-      radio.printDetails();
-      Serial.print("Packet received counter:");
-      Serial.println(received_packet_counter);
-      Serial.print("Packet missed received queries counter:");
-      Serial.println(packet_missed_counter);
-      printSerialBuffers();
-      printBooleanACK();
-      Serial.println(pck_seq);
-      Serial.println(data_rcv_seq);
-      Serial.println(data_send_log);
-      printf("--------------------------\n\r");
-    }
-    /*END DEBUG*/
+  // If data is available, handle it accordingly
+  if ( rx ){
+
+  if(radio.getDynamicPayloadSize() < 1){
+  // Corrupt payload has been flushed
+  return;
+}
+// Read in the data
+uint8_t received;
+radio.read(&received,sizeof(received));
+// If this is a ping, send back a pong
+if(received == ping){
+radio.stopListening();
+// Can be important to flush the TX FIFO here if using 250KBPS data rate
+//radio.flush_tx();
+radio.startWrite(&pong,sizeof(pong),0);
+}else
+// If this is a pong, get the current micros()
+if(received == pong){
+round_trip_timer = micros() - round_trip_timer;
+Serial.print(F("Received Pong, Round Trip Time: "));
+Serial.println(round_trip_timer);
+}
+}
+// Start listening if transmission is complete
+if( tx || fail ){
+radio.startListening();
+Serial.println(tx ? F("Send:OK") : F("Send:Fail"));
+}*/
+}
+
+
+void RFCore::debug(){ //WARNING: this functions introduce strange effect, see history file.
+  /*Serial.println("-------RF DEBUG-----------");
+  Serial.print("radio channel:");
+  Serial.println(radio.channel);
+  Serial.print("radio mode:");
+  Serial.println(radio.mode);
+  Serial.print("Local address:");
+  Serial.println(radio.localAddress);
+  Serial.print("Remote address:");
+  Serial.println(radio.remoteAddress);*/
+  radio.printDetails();
+  Serial.print("Packet received counter:");
+
+  Serial.print("Packet missed received queries counter:");
+  Serial.println("something");
+
+  printf("--------------------------\n\r");
+}
+/*END DEBUG*/

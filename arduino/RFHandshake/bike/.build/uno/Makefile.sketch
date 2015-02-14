@@ -1,0 +1,14 @@
+
+
+
+
+
+.build/uno/src/handshake.cpp : src/handshake.ino
+	@mkdir -p .build/uno/src
+	@echo [93msrc/handshake.ino[0m
+	@/usr/local/bin/ino preproc  -o $@ $^
+
+
+all : .build/uno/src/handshake.cpp
+	@true
+

@@ -6,6 +6,7 @@
 #include "nRF24L01.h"
 #include "RF24.h"
 
+
 /*-----( Declare Constants and Pin Numbers )-----*/
 #define CE_PIN   9
 #define CSN_PIN 10
@@ -26,7 +27,6 @@ MISO	 7->12
 
 **/
 
-#define STACK_SIZE 6
 #define PAYLOAD_SIZE 8 // size of the data part, 9 bytes: [NUM_PACKET,8 bytes of data]
 /*Communication sequence:
 TERMINAL: broadcast his adress (uint64_t) on channel 1, 8 bytes of data
@@ -47,20 +47,17 @@ terminal send YES or NO
 class RFCore
 {
   public:
-    RFCore(uint64_t,bool);
-    void reset();
+    RFCore(int,bool);
+    void endOfSession();
     bool handShake();
-    uint64_t getRemoteID();
-    void sendPacket(unsigned char *packet);
-    bool getNextPacket(unsigned char *packet);
-    void printSerialBuffers();
-    void toDebug();
+    bool rangeTest();
+    bool sendPacket(unsigned char *packet);
+    bool getPacket(unsigned char *packet);
+    void debug();
+    void printSessionCounter();
+    void closeSession();
   private:
-    void retransmissionQuery(unsigned char pck_number);
-    static void messageReceived(void);
-    void changeChannel(int new_channel);
-    void addTXPacket(unsigned char *new_packet,int num_packet);
-    void getTXPacket(unsigned char *packet,int num_packet);
+    static void check_radio(void);
 };
 
 #endif
