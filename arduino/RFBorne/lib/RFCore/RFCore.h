@@ -54,6 +54,8 @@ class RFCore
     bool sendPacket(unsigned char *packet);
     bool getPacket(unsigned char *packet);
     void debug();
+    void printSessionCounter();
+    void closeSession();
   private:
     static void check_radio(void);
 };

@@ -19,16 +19,19 @@ void setup(void)
 {
   Serial.begin(57600);
   printf_begin();
-  int BIKE_ID = 2;//will read EEPROM after
-  rf_core = new RFCore(BIKE_ID, true);
+  rf_core = new RFCore(0, true);
 }
 
 void loop(){
-  bool terminal_in_range = rf_core->handShake();
+/*  bool terminal_in_range = rf_core->handShake();
   if(terminal_in_range)
   {
     printf("Terminal in range!\n\r");
-  }
+  }*/
 
-  delay(200);
+  //printf("waiting bike\n\r");
+  //srf_core->rangeTestCounter();
+  rf_core->printSessionCounter();
+
+  //delay(200);
 }
