@@ -22,7 +22,8 @@ void loop(){
 
   //printf("waiting bike\n\r");
   //srf_core->rangeTestCounter();
-  rf_core->printSessionCounter();
+  rf_core->checkRadioNoIRQ();
+  delay(40);
 
   //delay(200);
 }
