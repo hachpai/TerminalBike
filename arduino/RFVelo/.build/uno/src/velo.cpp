@@ -36,9 +36,9 @@ void loop(){
 
       printf("success handshake!\n\r");
       rf_core->closeSession();
-      rf_core->printSessionCounter();
+    //  rf_core->printSessionCounter();
     }
 
   }
-  delay(500);
+  delay(1000);
 }

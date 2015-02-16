@@ -47,8 +47,7 @@ terminal send YES or NO
 class RFCore
 {
   public:
-    RFCore(int,bool);
-    void endOfSession();
+    RFCore(unsigned int,bool);
     bool handShake();
     bool rangeTest();
     bool sendPacket(unsigned char *packet);
@@ -56,6 +55,7 @@ class RFCore
     void debug();
     void printSessionCounter();
     void closeSession();
+    void checkRadioNoIRQ();
   private:
     static void check_radio(void);
 };
