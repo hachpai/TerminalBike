@@ -2,17 +2,16 @@
 
 volatile uint8_t in_session=false;
 volatile int irq1,irq2,irq3;
-volatile boolean success_range = false;
+
 volatile int session_counter=0;
 RF24 radio(9,10);
 
 const int TIMEOUT=3000;
-//const uint64_t start_bike_pipe = [0xBBBBABCD71LL,0xBBBBABCD71LL+1];
+
 #define range_test_pipe_terminal 0xBBBBABCD01LL //0xBBBBABCD71LL
 #define handshake_pipe_terminal 0xBBBBABCD03LL
 #define session_pipe_terminal 0xBBBBABCD05LL //for sessions pair to pair communication
 #define start_bike_pipe 0xBBBBABCD07LL
-//const uint64_t handshake_pipe = [0x544d52687CLL,0x544d52687CLL+1];
 
 bool is_terminal;
 
@@ -46,13 +45,10 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically alloc
     radio.openReadingPipe(3,session_pipe_terminal); //for sessions
   } else { //bike
     radio.openWritingPipe(range_test_pipe_terminal); //bike is always the first to talk
-    //radio.openReadingPipe(1,range_test_pipes.bike); //only for ackpayload?
     radio.openReadingPipe(1,start_bike_pipe+id);
-    //radio.openReadingPipe(2,start_bike_pipe+id);
   }
 
   if(is_terminal){
-    //radio.writeAckPayload(range_test_pipes.terminal,&success_code_ack, sizeof(success_code_ack) );
     radio.startListening(); // Start listening
   }
 
@@ -184,7 +180,7 @@ void RFCore::closeSession(){
   {
     int time_now = millis();
     if((time_now-time_start) > TIMEOUT*10){
-      printf("TIMEOUT SO BAD!!%d\n\r");
+      printf("TIMEOUT SO BAD!!\n\r");
     }
     radio.stopListening();
     radio.write(&closing_session_code,sizeof(closing_session_code));
@@ -228,10 +224,10 @@ void RFCore::checkRadioNoIRQ(void)
 
       case 1: //range_test pipe
       if(is_terminal){
-        unsigned int id;
-        radio.read(&id,sizeof(int));
+        unsigned int _id;
+        radio.read(&_id,sizeof(int));
         radio.stopListening();
-        radio.openWritingPipe(start_bike_pipe+id);
+        radio.openWritingPipe(start_bike_pipe+_id);
         //printf("id received:%d",id);
         if(in_session){
 
@@ -278,6 +274,9 @@ void RFCore::checkRadioNoIRQ(void)
         radio.openWritingPipe(start_bike_pipe+id);
         //printf("id received:%d",id);
         radio.write(&success_logout_code,sizeof(success_logout_code)); //notice successful logout to bike
+      }
+      else{
+        //here we receive RFID+user code and check DB. If authorized, send confirmation code for unlocking
       }
       break;
     }
