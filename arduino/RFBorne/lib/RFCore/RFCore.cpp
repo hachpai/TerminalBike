@@ -30,7 +30,6 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically alloc
   radio.begin();
   radio.setAutoAck(1); // Ensure autoACK is enabled
   //radio.enableAckPayload(); // Allow optional ack payloads
-  //radio.setRetries(0,15); // Smallest time between retries, max no. of retries
   //8*8 bytes of data, meaning 8 integers
   radio.setPayloadSize(sizeof(uint64_t));
   radio.setRetries(15,15);
@@ -51,7 +50,6 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically alloc
   if(is_terminal){
     radio.startListening(); // Start listening
   }
-
 
   radio.printDetails(); // Dump the configuration of the rf unit for debugging
   if(is_terminal){//only the terminal listen passively to radio
@@ -108,14 +106,10 @@ bool RFCore::handShake(){
     printf("Got response in HANDSHAKE %s\n\r",data_received);
     if(strcmp(data_received,success_code)==0)
     {
-
       return true;
     }
-
   }
-
 }
-
 
 bool RFCore::rangeTest()
 {
@@ -139,14 +133,11 @@ bool RFCore::rangeTest()
       delay(20);
       if(!radio.available())
       {
-
         printf(".");
-
       }
       else{
         ping_pong=true;
       }
-
     }
     printf("\n\r");
     while(radio.available())
@@ -188,9 +179,7 @@ void RFCore::closeSession(){
     delay(20);
     if(!radio.available())
     {
-
       printf(".");
-
     }
     else{
       char response[5];
@@ -200,7 +189,6 @@ void RFCore::closeSession(){
         ping_pong=true;
         printf("Log out success!!\n\r");
       }
-
     }
   }
   printf("\n\r");
