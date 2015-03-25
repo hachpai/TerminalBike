@@ -3,6 +3,7 @@
 #include <Servo.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
+#include "Rfid.h"
 
 /************************/
 /** PINs configuration **/
@@ -40,9 +41,19 @@ IRQ -> 2
 */
 
 /* RFID */
+const int RFID_IN = 7; //final version will use pin 0 (serial)
+const int RFID_OUT = 8;//final version will use pin 1 (without serial.begin, it makes them unusable)
+
+
+/*others constants*/
+const int RFID_TIMEOUT = 10000; //10 sec to put the rfid card
 
 bool terminal_in_range = false;
+
+Rfid rfid(RFID_IN,RFID_OUT);
 RFCore * rf_core;
+
+byte client_rfid[6] = {34,35,36,37,38,39};
 
 void setup(void) {
 	Serial.begin(57600);
@@ -102,10 +113,40 @@ void sleepNow() {
 	digitalWrite(13,HIGH);   // turn LED on to indicate awake
 }
 
+/**
+ * Try to read the RFID Data. There is a timeout given by RFID_TIMEOUT
+ *
+ * Return true if RFID code whare read (the data is stored in client_rfid)
+ * return false otherwise
+ */
+boolean getRFID(){
+	int actual_time= millis();
+	int initial_time = actual_time;
+	boolean received = false;
+	while((actual_time-initial_time) < RFID_TIMEOUT && !received) {
+		received = rfid.RFIDRead(&client_rfid[0]);
+		actual_time = millis();
+		delay(50);
+	}
+	return received;
+}
+
+void testRFID() {
+	printf("Test RFID...");
+	if(getRFID()) {
+			for(int i =0; i<6;i++){
+			Serial.print(client_rfid[i],HEX);
+		}
+	} else {
+		printf(" NO RFID\n\r");
+	}
+}
+
 void loop() {
 	terminal_in_range = rf_core->rangeTest();
 	if(terminal_in_range) {
 		printf("Terminal in range!\n\r");
+		testRFID();
 		delay(500);
 		if(rf_core->handShake()) {
 			printf("success handshake!\n\r");
