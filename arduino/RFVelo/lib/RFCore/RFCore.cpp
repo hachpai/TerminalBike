@@ -60,7 +60,19 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically alloc
 
 }
 
-bool RFCore::sendPacket(unsigned char *packet){
+bool RFCore::sendData( const void* buf, uint8_t len )
+{
+  radio.stopListening();
+  radio.openWritingPipe(session_pipe_terminal);
+  radio.write(buf, len);
+  radio.startListening();
+  delay(20);
+}
+
+bool RFCore::sendPacket(unsigned char *packet)
+{
+  /**** DEPRECIATE *****/
+
   //radio.stopListening();
   //IMPORTANT:putting the RF chip in txmode avoid an rx interrupt, resulting in inchorent data in data
   //(interruption of the for)
@@ -79,8 +91,7 @@ bool RFCore::handShake(){
   bool ping_pong=false;
   printf("Handshaking...");
   int time_start=millis();
-  while(!ping_pong)
-  {
+  while(!ping_pong) {
     int time_now = millis();
     if((time_now-time_start) > TIMEOUT){
       printf("TIMEOUT\n\r");
@@ -91,22 +102,18 @@ bool RFCore::handShake(){
 
     radio.startListening();
     delay(20);
-    if(!radio.available())
-    {
+    if(!radio.available()) {
       printf(".");
-    }
-    else{
+    } else {
       ping_pong=true;
     }
   }
   printf("\n\r");
-  while(radio.available())
-  {
+  while(radio.available()) {
     char data_received[3];
     radio.read( &data_received, sizeof(data_received));
     printf("Got response in HANDSHAKE %s\n\r",data_received);
-    if(strcmp(data_received,success_code)==0)
-    {
+    if(strcmp(data_received,success_code)==0) {
       return true;
     }
   }
@@ -114,17 +121,15 @@ bool RFCore::handShake(){
 
 bool RFCore::rangeTest()
 {
-  if (!is_terminal)
-  {
+  if (!is_terminal) {
     radio.stopListening(); // First, stop listening so we can talk.
     radio.openWritingPipe(range_test_pipe_terminal);
     bool ping_pong=false;
     printf("Range testing...");
     int time_start=millis();
-    while(!ping_pong)
-    {
+    while(!ping_pong) {
       int time_now = millis();
-      if((time_now-time_start) > TIMEOUT){
+      if((time_now-time_start) > TIMEOUT) {
         printf("TIMEOUT\n\r");
         return false;
       }
@@ -177,21 +182,16 @@ void RFCore::closeSession(){
     radio.write(&closing_session_code,sizeof(closing_session_code));
     radio.startListening();
     delay(20);
-    if(!radio.available())
-    {
-
+    if(!radio.available()) {
       printf(".");
-
-    }
-    else{
+    } else {
       char response[5];
       radio.read(&response,sizeof(response));
       printf("RECEIVED: %s\n\r",response);
-      if(strcmp(response,success_logout_code)==0){
+      if(strcmp(response,success_logout_code)==0) {
         ping_pong=true;
         printf("Log out success!!\n\r");
       }
-
     }
   }
   printf("\n\r");
@@ -206,8 +206,7 @@ void RFCore::checkRadioNoIRQ(void)
 {
   uint8_t pipe_number;
 
-  while(radio.available(&pipe_number))
-  {
+  while(radio.available(&pipe_number)) {
     printf("data on pipe %u, in session:%d\n\r",pipe_number,in_session);
     //last_pipe= pipeNo;
     switch(pipe_number){
@@ -264,6 +263,11 @@ void RFCore::checkRadioNoIRQ(void)
           radio.write(&success_logout_code,sizeof(success_logout_code)); //notice successful logout to bike
         }
         else{
+          printf("---- Received DATA : ");
+          for(int i =0; i<6;i++){
+            printf("%x",data[i]);
+          }
+          printf("\n\r");
           //here we receive RFID+user code and check DB. If authorized, send confirmation code for unlocking
         }
         break;

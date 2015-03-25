@@ -56,6 +56,7 @@ class RFCore
     void printSessionCounter();
     void closeSession();
     void checkRadioNoIRQ();
+    bool sendData(const void* buf, uint8_t len);
   private:
     static void check_radio(void);
 };

@@ -87,7 +87,6 @@ void switchButtonsInterrupts(boolean on) { //TRUE for ON, FALSE for off
 	}
 }
 
-
 /**
  * Set the bike in sleep mod. The bike is awaked when a button is pressed.
  */
@@ -131,29 +130,37 @@ boolean getRFID(){
 	return received;
 }
 
-void testRFID() {
-	printf("Test RFID...");
-	if(getRFID()) {
-			for(int i =0; i<6;i++){
-			Serial.print(client_rfid[i],HEX);
-		}
-	} else {
-		printf(" NO RFID\n\r");
-	}
-}
-
 void loop() {
 	terminal_in_range = rf_core->rangeTest();
+	printf("Awake\n\r");
+
 	if(terminal_in_range) {
 		printf("Terminal in range!\n\r");
-		testRFID();
 		delay(500);
-		if(rf_core->handShake()) {
-			printf("success handshake!\n\r");
-			rf_core->closeSession();
+
+		if (!getRFID()) {
+			printf("No RFID given\n\r");
+		} else {
+			printf("Get RFID : ");
+			for(int i =0; i<6;i++){
+				Serial.print(client_rfid[i],HEX);
+			}
+			printf("\n\r");
+
+			if(rf_core->handShake()) {
+				printf("Success handshake!\n\r");
+
+				printf("Sending data\n\r");
+				rf_core->sendData(client_rfid, sizeof(client_rfid));
+
+				printf("Closing session\n\r");
+
+				rf_core->closeSession();
 			//  rf_core->printSessionCounter();
+			}
 		}
 	}
 
+	printf("Go to sleep\n\r");
 	sleepNow();
 }
