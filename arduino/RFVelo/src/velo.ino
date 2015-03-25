@@ -47,6 +47,10 @@ const int RFID_OUT = 8;//final version will use pin 1 (without serial.begin, it 
 
 /*others constants*/
 const int RFID_TIMEOUT = 10000; //10 sec to put the rfid card
+const int USER_CODE_TIMEOUT = 10000; //10 sec to type the code
+const int USER_CODE_LENGTH = 4;
+
+
 
 bool terminal_in_range = false;
 
@@ -54,6 +58,8 @@ Rfid rfid(RFID_IN,RFID_OUT);
 RFCore * rf_core;
 
 byte client_rfid[6] = {34,35,36,37,38,39};
+
+unsigned char user_code[6]= {0,0,0,0,0,0}; //All char array about to be send must be the size of one packet
 
 void setup(void) {
 	Serial.begin(57600);
@@ -75,12 +81,12 @@ void switchButtonsInterrupts(boolean on) { //TRUE for ON, FALSE for off
 	* D8-D13 = PCINT 0-5 = PCIE0 = pcmsk0
 	* A0-A5 (D14-D19) = PCINT 8-13 = PCIE1 = pcmsk1*/
 	//interrupt on analog PIN A0 y A1
-	if(on){ //enable interrupts
+	if(on) { //enable interrupts
 		PCICR |= (1<<PCIE1);
 		PCMSK1 |= (1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
 		PCMSK1 |= (1<<PCINT9); //9 for A1
 	}
-	else{//disable interrupts
+	else {//disable interrupts
 		PCICR &= ~(1<<PCIE1);
 		PCMSK1 &= ~(1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
 		PCMSK1 &= ~(1<<PCINT9); //9 for A1
@@ -118,7 +124,7 @@ void sleepNow() {
  * Return true if RFID code whare read (the data is stored in client_rfid)
  * return false otherwise
  */
-boolean getRFID(){
+boolean getRFID() {
 	int actual_time= millis();
 	int initial_time = actual_time;
 	boolean received = false;
@@ -128,6 +134,52 @@ boolean getRFID(){
 		delay(50);
 	}
 	return received;
+}
+
+/**
+ * Try to get the User Code. 
+ * This function is customized by the following constants :
+ * - USER_CODE_TIMEOUT : timeout (in milliseconds)
+ * - USER_CODE_LENGTH : the lenth of the code
+ *
+ * Return true if the code is read and store the variable in the variable user_code
+ * Return false otherwise
+ */
+boolean getUserCode(){
+	int button_state1=LOW,button_state2=LOW,index_key=0;
+	int actual_time= millis();
+	int initial_time = actual_time;
+	boolean buttons_released =false;
+	while((actual_time-initial_time) < USER_CODE_TIMEOUT && index_key < USER_CODE_LENGTH){
+		actual_time = millis();
+		button_state1 = digitalRead(BUTTON_PIN1);
+		button_state2 = digitalRead(BUTTON_PIN2);
+
+		if(button_state1== LOW && button_state2 == LOW){ // if both buttons are released
+			buttons_released = true;
+			digitalWrite(BUTTON_PIN1,LOW);
+		}
+		//check if user has released the buttons and if only one is pressed
+		else if(buttons_released && (button_state1== HIGH ^ button_state2 == HIGH))
+		{
+			// verify which button is pressed and if not both are pressed
+			Serial.println("INSIDE!");
+			if (button_state1 == HIGH && button_state2 == LOW) {
+				Serial.println("INSIDE 1!");
+				user_code[index_key] = 1;
+				index_key++;
+				delay(200); //to avoid contact bounce
+			}
+			else if(button_state2 == HIGH && button_state1 == LOW){
+				Serial.println("INSIDE 2!");
+				user_code[index_key] = 2;
+				index_key++;
+				delay(200); //to avoid contact bounce
+			}
+			buttons_released = false;
+		}
+	}
+	return (index_key == USER_CODE_LENGTH);
 }
 
 void loop() {
@@ -147,16 +199,27 @@ void loop() {
 			}
 			printf("\n\r");
 
-			if(rf_core->handShake()) {
-				printf("Success handshake!\n\r");
+			if(!getUserCode()) {
+				printf("No user code given\n\r");
+			} else {
+				printf("User code given\n\r");
+				
+				for(int i =0; i<USER_CODE_LENGTH;i++){
+					Serial.print(user_code[i]);
+				}
 
-				printf("Sending data\n\r");
-				rf_core->sendData(client_rfid, sizeof(client_rfid));
 
-				printf("Closing session\n\r");
+				if(rf_core->handShake()) {
+					printf("Success handshake!\n\r");
 
-				rf_core->closeSession();
-			//  rf_core->printSessionCounter();
+					printf("Sending data\n\r");
+					rf_core->sendData(client_rfid, sizeof(client_rfid));
+
+					printf("Closing session\n\r");
+
+					rf_core->closeSession();
+				//  rf_core->printSessionCounter();
+				}
 			}
 		}
 	}
