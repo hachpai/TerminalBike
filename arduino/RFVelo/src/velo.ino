@@ -61,6 +61,8 @@ byte client_rfid[6] = {34,35,36,37,38,39};
 
 unsigned char user_code[6]= {0,0,0,0,0,0}; //All char array about to be send must be the size of one packet
 
+byte user_code_byte = 0x0;
+
 void setup(void) {
 	Serial.begin(57600);
 
@@ -150,6 +152,8 @@ boolean getUserCode(){
 	int actual_time= millis();
 	int initial_time = actual_time;
 	boolean buttons_released =false;
+	user_code_byte = 0x0;
+
 	while((actual_time-initial_time) < USER_CODE_TIMEOUT && index_key < USER_CODE_LENGTH){
 		actual_time = millis();
 		button_state1 = digitalRead(BUTTON_PIN1);
@@ -168,12 +172,25 @@ boolean getUserCode(){
 				Serial.println("INSIDE 1!");
 				user_code[index_key] = 1;
 				index_key++;
+
+				user_code_byte = user_code_byte | 0X0;
+				if(index_key != USER_CODE_LENGTH) {
+					user_code_byte = user_code_byte << 1;
+				}
+
+
 				delay(200); //to avoid contact bounce
 			}
 			else if(button_state2 == HIGH && button_state1 == LOW){
 				Serial.println("INSIDE 2!");
 				user_code[index_key] = 2;
 				index_key++;
+
+				user_code_byte = user_code_byte | 0X1;
+				if(index_key != USER_CODE_LENGTH) {
+					user_code_byte = user_code_byte << 1;
+				}
+
 				delay(200); //to avoid contact bounce
 			}
 			buttons_released = false;
@@ -202,18 +219,33 @@ void loop() {
 			if(!getUserCode()) {
 				printf("No user code given\n\r");
 			} else {
-				printf("User code given\n\r");
+				printf("User code given : ");
 				
 				for(int i =0; i<USER_CODE_LENGTH;i++){
 					Serial.print(user_code[i]);
 				}
+
+				printf("\n\r");
+
+				printf("%i", user_code_byte);
+
+				printf("\n\r");
 
 
 				if(rf_core->handShake()) {
 					printf("Success handshake!\n\r");
 
 					printf("Sending data\n\r");
-					rf_core->sendData(client_rfid, sizeof(client_rfid));
+
+					byte data[7] = {0,0,0,0,0,0,0};
+
+					data[0] = user_code_byte;
+
+					for(int i =0; i<6;i++) {
+						data[i + 1] = client_rfid[i];
+					}
+
+					rf_core->sendData(data, sizeof(data));
 
 					printf("Closing session\n\r");
 
