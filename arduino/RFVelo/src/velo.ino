@@ -49,8 +49,8 @@ const int RFID_OUT = 8;//final version will use pin 1 (without serial.begin, it 
 const int RFID_TIMEOUT = 10000; //10 sec to put the rfid card
 const int USER_CODE_TIMEOUT = 10000; //10 sec to type the code
 const int USER_CODE_LENGTH = 4;
-
-
+const int MAX_ATTEMPT_TO_SEND_DATA = 3; // number attempts to send data to the born/terminal
+const int DELAY_ATTEMPT_TO_SEND_DATA = 300; // 0.3 sec to wait between 2 attemps of sending data to the born/terminal
 
 bool terminal_in_range = false;
 
@@ -199,6 +199,39 @@ boolean getUserCode(){
 	return (index_key == USER_CODE_LENGTH);
 }
 
+boolean canWithdraw() {
+	if(rf_core->handShake()) {
+		printf("Success handshake!\n\r");
+		printf("Sending data\n\r");
+
+		int attemp_number = 0;
+		boolean has_data = false;
+		byte data[7] = {0,0,0,0,0,0,0};
+		data[0] = user_code_byte;
+		for(int i =0; i<6;i++) {
+			data[i + 1] = client_rfid[i];
+		}
+
+		rf_core->clearData();
+
+		while(attemp_number < MAX_ATTEMPT_TO_SEND_DATA &&  !rf_core->hasData()) {
+			rf_core->sendData(data, sizeof(data));
+			delay(DELAY_ATTEMPT_TO_SEND_DATA);
+			attemp_number = attemp_number + 1;
+		}
+
+		if(rf_core->hasData()) {
+			printf("Born has given reponse\n\r");
+		} else {
+			printf("No response from the born\n\r");
+		}
+
+		printf("Closing session\n\r");
+		rf_core->closeSession();
+	}
+	return false;
+}
+
 void loop() {
 	terminal_in_range = rf_core->rangeTest();
 	printf("Awake\n\r");
@@ -224,33 +257,14 @@ void loop() {
 				for(int i =0; i<USER_CODE_LENGTH;i++){
 					Serial.print(user_code[i]);
 				}
-
 				printf("\n\r");
 
-				printf("%i", user_code_byte);
+				printf("%i\n\r", user_code_byte);
 
-				printf("\n\r");
-
-
-				if(rf_core->handShake()) {
-					printf("Success handshake!\n\r");
-
-					printf("Sending data\n\r");
-
-					byte data[7] = {0,0,0,0,0,0,0};
-
-					data[0] = user_code_byte;
-
-					for(int i =0; i<6;i++) {
-						data[i + 1] = client_rfid[i];
-					}
-
-					rf_core->sendData(data, sizeof(data));
-
-					printf("Closing session\n\r");
-
-					rf_core->closeSession();
-				//  rf_core->printSessionCounter();
+				if(canWithdraw()) {
+					printf("Ok withdraw");
+				} else {
+					printf("No withdraw");
 				}
 			}
 		}
