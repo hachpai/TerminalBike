@@ -19,6 +19,9 @@ char success_code[]  = "OK";
 char success_logout_code[]  = "OKLO";
 char busy_code[] = "KO";
 
+char withdraw_code[] = "WIOK";
+char no_withdraw_code[] = "WINO";
+
 unsigned int bike_id;
 void printPipe();
 
@@ -74,8 +77,17 @@ bool RFCore::hasData() {
   return radio.available();
 }
 
-bool RFCore::getData(const void* data_received, uint8_t len) {
-  return radio.read(&data_received, len);
+void RFCore::getData(void* data_received, uint8_t len) {
+  radio.read(&data_received, len);
+}
+
+void RFCore::clearData() {
+  delay(20);
+  byte data;
+
+  while(radio.available()) {
+    radio.read(&data, sizeof(data));
+  }
 }
 
 bool RFCore::handShake(){

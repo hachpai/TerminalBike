@@ -71,7 +71,13 @@ class RFCore
 		/**
 		 * Write data in buf (as radion.read)
 		 */
-		bool getData(const void* buf, uint8_t len);
+		void getData(void* buf, uint8_t len);
+
+
+		/**
+		 * Remove data from the radio buffer
+		 */
+		void clearData();
 	private:
 		static void check_radio(void);
 };
