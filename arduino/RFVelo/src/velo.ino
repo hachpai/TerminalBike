@@ -221,12 +221,16 @@ boolean canWithdraw() {
 			rf_core->sendData(data, sizeof(data));
 			attemp_number = attemp_number + 1;
 			delay(DELAY_ATTEMPT_TO_SEND_DATA);
+			printf("- before hasData\n\r");
 			if(rf_core->hasData()) {
+				printf("--- has data \n\r");
 				rf_core->getData(&terminal_response, sizeof(terminal_response));
-				printf("REP : %s\n\r", terminal_response);
+				printf("GET : %s\n\r", terminal_response);
 				if(strcmp(terminal_response,"WIOK")==0 || strcmp(terminal_response,"WINO")==0) {
 					has_response = true;
 				}
+			} else {
+				printf("-X-X- -X- %i ---\n\r", attemp_number);
 			}
 		}
 
@@ -249,6 +253,8 @@ boolean canWithdraw() {
 void loop() {
 	terminal_in_range = rf_core->rangeTest();
 	printf("Awake\n\r");
+
+	rf_core->debug();
 
 	if(terminal_in_range) {
 		printf("Terminal in range!\n\r");
