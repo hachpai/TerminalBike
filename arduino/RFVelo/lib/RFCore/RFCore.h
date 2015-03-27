@@ -1,11 +1,7 @@
 #include <Arduino.h>
-
-
 #include <SPI.h>
-//for nrf docs http://nrqm.ca/nrf24l01/
-#include "nRF24L01.h"
+#include "nRF24L01.h" //for nrf docs http://nrqm.ca/nrf24l01/
 #include "RF24.h"
-
 
 /*-----( Declare Constants and Pin Numbers )-----*/
 #define CE_PIN   9
@@ -15,7 +11,7 @@
 
 2 4 6 8 10
 1 3 5 7 9
-    _
+	_
 
 GND 2->GND
 3V3	 1->3V3
@@ -37,26 +33,46 @@ bike send user code (uint8_t)
 terminal send YES or NO
 */
 
-
-#define TIMEOUT_DELAY 2000
 #ifndef RFCore_h
 #define RFCore_h
-
-
-
 class RFCore
 {
-  public:
-    RFCore(unsigned int,bool);
-    bool handShake();
-    bool rangeTest();
-    void debug();
-    void printSessionCounter();
-    void closeSession();
-    void checkRadioNoIRQ();
-    bool sendData(const void* buf, uint8_t len);
-  private:
-    static void check_radio(void);
-};
+	public:
+		RFCore(unsigned int,bool);
 
+		/**
+		 * Return true if the bike can communicate with the born/terminal
+		 */
+		bool handShake();
+
+		/**
+		 * Return true if the bike and born/terminal are close enought to communicate
+		 */
+		bool rangeTest();
+		void debug();
+		void printSessionCounter();
+
+		/**
+		 * Return true if the bike and born/terminal are close enought to communicate
+		 */    
+		void closeSession(); // stop the hand shake (ie. the bike says it has finish to communicate withe the born/terminal)
+		void checkRadioNoIRQ();
+		
+		/**
+		 * Send data from buf (as radion.write)
+		 */
+		bool sendData(const void* buf, uint8_t len);
+		
+		/**
+		 * Return true if the radio has data to read
+		 */
+		bool hasData();
+		
+		/**
+		 * Write data in buf (as radion.read)
+		 */
+		bool getData(const void* buf, uint8_t len);
+	private:
+		static void check_radio(void);
+};
 #endif

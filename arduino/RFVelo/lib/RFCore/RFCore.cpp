@@ -60,13 +60,22 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically alloc
 
 }
 
-bool RFCore::sendData( const void* buf, uint8_t len )
-{
+bool RFCore::sendData(const void* buf, uint8_t len) {
+  bool ret;
   radio.stopListening();
   radio.openWritingPipe(session_pipe_terminal);
-  radio.write(buf, len);
+  ret = radio.write(buf, len);
   radio.startListening();
   delay(20);
+  return ret;
+}
+
+bool RFCore::hasData() {
+  return radio.available();
+}
+
+bool RFCore::getData(const void* data_received, uint8_t len) {
+  return radio.read(&data_received, len);
 }
 
 bool RFCore::handShake(){
