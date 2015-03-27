@@ -8,6 +8,9 @@ RF24 radio(9,10);
 
 const int TIMEOUT=3000;
 
+const int MAX_ATTEMPT_TO_SEND_DATA = 4;
+const int DELAY_ATTEMPT_TO_SEND_DATA = 300;
+
 #define range_test_pipe_terminal 0xBBBBABCD01LL //0xBBBBABCD71LL
 #define handshake_pipe_terminal 0xBBBBABCD03LL
 #define session_pipe_terminal 0xBBBBABCD05LL //for sessions pair to pair communication
@@ -51,42 +54,13 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically alloc
     radio.openReadingPipe(1,start_bike_pipe+bike_id);
   }
 
-  if(is_terminal){
+  if(is_terminal) {
     radio.startListening(); // Start listening
   }
 
-
   radio.printDetails(); // Dump the configuration of the rf unit for debugging
-  if(is_terminal){//only the terminal listen passively to radio
+  if(is_terminal) {//only the terminal listen passively to radio
     //attachInterrupt(0, check_radio, LOW);
-  }
-
-}
-
-bool RFCore::sendData(const void* buf, uint8_t len) {
-  bool ret;
-  radio.stopListening();
-  radio.openWritingPipe(session_pipe_terminal);
-  ret = radio.write(buf, len);
-  radio.startListening();
-  delay(20);
-  return ret;
-}
-
-bool RFCore::hasData() {
-  return radio.available();
-}
-
-void RFCore::getData(void* data_received, uint8_t len) {
-  radio.read(&data_received, len);
-}
-
-void RFCore::clearData() {
-  delay(20);
-  byte data;
-
-  while(radio.available()) {
-    radio.read(&data, sizeof(data));
   }
 }
 
@@ -125,6 +99,64 @@ bool RFCore::handShake(){
   }
 }
 
+int RFCore::withdrawPermission(byte button_code, void* rfid_code)
+{
+  byte* rfid_code_byte = reinterpret_cast<byte*>(rfid_code);
+
+  if (!is_terminal) {
+    delay(20);
+    byte data_to_rm;
+    radio.startListening();
+    while(radio.available()) {
+      radio.read(&data_to_rm, sizeof(data_to_rm));
+      delay(5);
+    }
+
+    radio.stopListening(); // First, stop listening so we can talk.
+    radio.openWritingPipe(session_pipe_terminal);
+
+    byte data_to_send[7];
+    data_to_send[0] = button_code;
+    for(int i=0; i < 6; i++) {
+      data_to_send[i + 1] = rfid_code_byte[i];
+    }
+
+    char terminal_response[5];
+    bool has_response = false;
+    int attemp_number = 0;
+
+    while(attemp_number < MAX_ATTEMPT_TO_SEND_DATA &&  !has_response) {
+      printf("------%i---\n\r", attemp_number);
+
+      radio.stopListening();
+      radio.write(&data_to_send, sizeof(data_to_send));
+      radio.startListening();
+      delay(20);
+
+      attemp_number = attemp_number + 1;
+      delay(DELAY_ATTEMPT_TO_SEND_DATA);
+
+      printf("- before hasData\n\r");
+      if(radio.available()) {
+        radio.read(&terminal_response, sizeof(terminal_response));
+
+        if(strcmp(terminal_response,"WIOK")==0) {
+          printf("Ok for withdraw\n\r");
+          return 1; // ok withdraw
+        }        
+
+        if(strcmp(terminal_response,"WINO")==0) {
+          printf("No for withdraw\n\r");
+          return -1; // ok withdraw
+        } 
+      }
+    }
+
+    printf("No response from the born\n\r");
+    return 0;
+  }
+}
+
 bool RFCore::rangeTest()
 {
   if (!is_terminal) {
@@ -149,12 +181,10 @@ bool RFCore::rangeTest()
       else {
         ping_pong=true;
       }
-
     }
     printf("\n\r");
     while(radio.available()) {
       char response[3];
-
       radio.read( &response, sizeof(response));
       if(strcmp(response,success_code)==0 || strcmp(response,busy_code)==0){//terminal reply with a busy or free code, range passed
         printf("Well received in range test:%s\n\r",response);
@@ -178,18 +208,20 @@ void RFCore::closeSession(){
   radio.stopListening();
   radio.openWritingPipe(session_pipe_terminal);
 
-  while(!ping_pong)
-  {
-    int time_now = millis();
-    if((time_now-time_start) > TIMEOUT*10){
-      printf("TIMEOUT SO BAD!!\n\r");
-    }
+  while(!ping_pong) {
     radio.stopListening();
     radio.write(&closing_session_code,sizeof(closing_session_code));
     radio.startListening();
     delay(20);
     if(!radio.available()) {
-      printf(".");
+      int time_now = millis();
+      if((time_now-time_start) > TIMEOUT){
+        printf("TIMEOUT SO BAD!!\n\r");
+        printf("METTESION SESSION A FAUX");
+        ping_pong = true;
+      } else {
+        printf(".");
+      }
     } else {
       char response[5];
       radio.read(&response,sizeof(response));
@@ -259,6 +291,8 @@ void RFCore::checkRadioNoIRQ(void)
         packet is [2 bytes CODE,(5 bytes RFID),(byte user code)] = 8 bytes of data (payload size)
         */
         radio.read(&data,sizeof(data));
+        printf("- 3 - - - Received %s \n\r",data);
+
         //WARNING: check the complete data array for ['L','O']
         if(data[0]=='L' && data[1]=='O'){//for log out code in session
           printf("Received %s,  ACK FOR LO, SEND BACK %s ON PIPE %lu.\n\r",data,success_logout_code,start_bike_pipe+bike_id);
@@ -271,9 +305,24 @@ void RFCore::checkRadioNoIRQ(void)
         else{
           printf("---- Received DATA : ");
           for(int i =0; i<6;i++){
-            printf("%x",data[i]);
+            printf("-%x-",data[i]);
           }
           printf("\n\r");
+
+          if(data[0] == 0x0) {
+            printf("--- Withdraw Accepted 1111 ---\n\r");
+            radio.stopListening();
+            radio.openWritingPipe(start_bike_pipe+bike_id);
+            radio.write(&withdraw_code,sizeof(withdraw_code));
+          } else if (data[0] == 0xF) {
+            printf("--- BBBBBUUUUGGG NOT DATA SEND --- 2222 ---\n\r");
+          } else {
+            printf("--- Withdraw Rejected ---\n\r");
+            radio.stopListening();
+            radio.openWritingPipe(start_bike_pipe+bike_id);
+            radio.write(&no_withdraw_code,sizeof(no_withdraw_code));
+          }
+
           //here we receive RFID+user code and check DB. If authorized, send confirmation code for unlocking
         }
         break;

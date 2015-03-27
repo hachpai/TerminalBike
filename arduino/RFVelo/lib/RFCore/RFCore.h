@@ -58,26 +58,7 @@ class RFCore
 		void closeSession(); // stop the hand shake (ie. the bike says it has finish to communicate withe the born/terminal)
 		void checkRadioNoIRQ();
 		
-		/**
-		 * Send data from buf (as radion.write)
-		 */
-		bool sendData(const void* buf, uint8_t len);
-		
-		/**
-		 * Return true if the radio has data to read
-		 */
-		bool hasData();
-		
-		/**
-		 * Write data in buf (as radion.read)
-		 */
-		void getData(void* buf, uint8_t len);
-
-
-		/**
-		 * Remove data from the radio buffer
-		 */
-		void clearData();
+		int withdrawPermission(byte, void*);
 	private:
 		static void check_radio(void);
 };

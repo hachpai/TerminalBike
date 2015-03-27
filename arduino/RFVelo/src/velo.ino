@@ -204,48 +204,13 @@ boolean canWithdraw() {
 		printf("Success handshake!\n\r");
 		printf("Sending data\n\r");
 
-		int attemp_number = 0;
-		boolean has_response = false;
-		byte data[7] = {0,0,0,0,0,0,0};
-		data[0] = user_code_byte;
-		for(int i =0; i<6;i++) {
-			data[i + 1] = client_rfid[i];
-		}
+		int response = rf_core->withdrawPermission(user_code_byte, &client_rfid);
 
-		rf_core->clearData();
-		
-		char terminal_response[5];
+		printf("response : %i", response);
 
-		while(attemp_number < MAX_ATTEMPT_TO_SEND_DATA &&  !has_response) {
-			printf("------%i---\n\r", attemp_number);
-			rf_core->sendData(data, sizeof(data));
-			attemp_number = attemp_number + 1;
-			delay(DELAY_ATTEMPT_TO_SEND_DATA);
-			printf("- before hasData\n\r");
-			if(rf_core->hasData()) {
-				printf("--- has data \n\r");
-				rf_core->getData(&terminal_response, sizeof(terminal_response));
-				printf("GET : %s\n\r", terminal_response);
-				if(strcmp(terminal_response,"WIOK")==0 || strcmp(terminal_response,"WINO")==0) {
-					has_response = true;
-				}
-			} else {
-				printf("-X-X- -X- %i ---\n\r", attemp_number);
-			}
-		}
-
-		if(has_response) {
-			if(strcmp(terminal_response,"WIOK")==0) {
-				printf("Ok for withdraw\n\r");
-			} else {
-				printf("No for withdraw\n\r");
-			}
-		} else {
-			printf("No response from the born\n\r");
-		}
-
-		printf("Closing session\n\r");
 		rf_core->closeSession();
+
+		return response == 1;
 	}
 	return false;
 }
