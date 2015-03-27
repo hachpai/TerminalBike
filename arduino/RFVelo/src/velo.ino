@@ -205,7 +205,7 @@ boolean canWithdraw() {
 		printf("Sending data\n\r");
 
 		int attemp_number = 0;
-		boolean has_data = false;
+		boolean has_response = false;
 		byte data[7] = {0,0,0,0,0,0,0};
 		data[0] = user_code_byte;
 		for(int i =0; i<6;i++) {
@@ -213,15 +213,29 @@ boolean canWithdraw() {
 		}
 
 		rf_core->clearData();
+		
+		char terminal_response[5];
 
-		while(attemp_number < MAX_ATTEMPT_TO_SEND_DATA &&  !rf_core->hasData()) {
+		while(attemp_number < MAX_ATTEMPT_TO_SEND_DATA &&  !has_response) {
+			printf("------%i---\n\r", attemp_number);
 			rf_core->sendData(data, sizeof(data));
-			delay(DELAY_ATTEMPT_TO_SEND_DATA);
 			attemp_number = attemp_number + 1;
+			delay(DELAY_ATTEMPT_TO_SEND_DATA);
+			if(rf_core->hasData()) {
+				rf_core->getData(&terminal_response, sizeof(terminal_response));
+				printf("REP : %s\n\r", terminal_response);
+				if(strcmp(terminal_response,"WIOK")==0 || strcmp(terminal_response,"WINO")==0) {
+					has_response = true;
+				}
+			}
 		}
 
-		if(rf_core->hasData()) {
-			printf("Born has given reponse\n\r");
+		if(has_response) {
+			if(strcmp(terminal_response,"WIOK")==0) {
+				printf("Ok for withdraw\n\r");
+			} else {
+				printf("No for withdraw\n\r");
+			}
 		} else {
 			printf("No response from the born\n\r");
 		}
