@@ -69,21 +69,6 @@ bool RFCore::sendData( const void* buf, uint8_t len )
   delay(20);
 }
 
-bool RFCore::sendPacket(unsigned char *packet)
-{
-  /**** DEPRECIATE *****/
-
-  //radio.stopListening();
-  //IMPORTANT:putting the RF chip in txmode avoid an rx interrupt, resulting in inchorent data in data
-  //(interruption of the for)
-
-  //radio.startWrite( &data[0], sizeof(unsigned char) ,0);
-  // to let the time at the other arduino to treat the datas
-}
-
-bool RFCore::getPacket(unsigned char *packet){
-}
-
 bool RFCore::handShake(){
   char data_received[3];
   radio.stopListening();
