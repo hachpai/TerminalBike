@@ -4,6 +4,7 @@
 #include <avr/sleep.h>
 #include <avr/power.h>
 #include "Rfid.h"
+#include "Adafruit_NeoPixel.h"
 
 /************************/
 /** PINs configuration **/
@@ -14,9 +15,12 @@ const int BUTTON_PIN1 = 14; //A0
 const int BUTTON_PIN2 = 15; //A1
 
 /* LED */
+const int LED_PIN = 5; // NeoPixel
+/*
 const int RED_PIN = 5;
 const int GREEN_PIN = 6;
 const int BLUE_PIN = 7;
+*/
 
 /* RF
 black module config: http://www.seeedstudio.com/document/pics/Interface.jpg
@@ -44,7 +48,6 @@ IRQ -> 2
 const int RFID_IN = 7; //final version will use pin 0 (serial)
 const int RFID_OUT = 8;//final version will use pin 1 (without serial.begin, it makes them unusable)
 
-
 /*others constants*/
 const int RFID_TIMEOUT = 10000; //10 sec to put the rfid card
 const int USER_CODE_TIMEOUT = 10000; //10 sec to type the code
@@ -63,6 +66,8 @@ unsigned char user_code[6]= {0,0,0,0,0,0}; //All char array about to be send mus
 
 byte user_code_byte = 0x0;
 
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(1, LED_PIN, NEO_KHZ800);
+
 void setup(void) {
 	Serial.begin(57600);
 
@@ -75,6 +80,7 @@ void setup(void) {
   
 	int BIKE_ID = 8;//will read EEPROM after
 	rf_core = new RFCore(BIKE_ID, false);
+	pixels.begin();
 }
 
 void switchButtonsInterrupts(boolean on) { //TRUE for ON, FALSE for off
@@ -93,6 +99,35 @@ void switchButtonsInterrupts(boolean on) { //TRUE for ON, FALSE for off
 		PCMSK1 &= ~(1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
 		PCMSK1 &= ~(1<<PCINT9); //9 for A1
 	}
+}
+
+void switchOnLed(char* color) {
+	int r = 0;
+	int g = 0;
+	int b = 0;
+
+	//Red
+	if(color == "red" or color == "yellow" or color == "orange" or color == "white") {
+		r = 255;
+	}
+	//Green
+	if (color == "green" or color == "yellow" or color == "white") {
+		g = 255;
+	} else if(color == "orange") {
+		g = 128;
+	}
+	//Blue
+	if (color == "blue" or color == "white") {
+		b = 255;
+	}
+
+	pixels.setPixelColor(0, pixels.Color(r,g,b));
+	pixels.show();
+}
+
+void switchOffLed() {
+	pixels.setPixelColor(0, pixels.Color(0,0,0));
+	pixels.show();
 }
 
 /**
@@ -169,6 +204,7 @@ boolean getUserCode(){
 			// verify which button is pressed and if not both are pressed
 			Serial.println("INSIDE!");
 			if (button_state1 == HIGH && button_state2 == LOW) {
+				switchOffLed();
 				Serial.println("INSIDE 1!");
 				user_code[index_key] = 1;
 				index_key++;
@@ -178,10 +214,11 @@ boolean getUserCode(){
 					user_code_byte = user_code_byte << 1;
 				}
 
-
 				delay(200); //to avoid contact bounce
+				switchOnLed("blue");
 			}
 			else if(button_state2 == HIGH && button_state1 == LOW){
+				switchOffLed();
 				Serial.println("INSIDE 2!");
 				user_code[index_key] = 2;
 				index_key++;
@@ -192,6 +229,7 @@ boolean getUserCode(){
 				}
 
 				delay(200); //to avoid contact bounce
+				switchOnLed("blue");
 			}
 			buttons_released = false;
 		}
@@ -206,7 +244,7 @@ boolean canWithdraw() {
 
 		int response = rf_core->withdrawPermission(user_code_byte, &client_rfid);
 
-		printf("response : %i", response);
+		printf("response : %i\n\r", response);
 
 		rf_core->closeSession();
 
@@ -219,20 +257,23 @@ void loop() {
 	terminal_in_range = rf_core->rangeTest();
 	printf("Awake\n\r");
 
-	rf_core->debug();
+	//rf_core->debug();
 
 	if(terminal_in_range) {
 		printf("Terminal in range!\n\r");
+		switchOnLed("white");
 		delay(500);
 
 		if (!getRFID()) {
 			printf("No RFID given\n\r");
+				switchOnLed("red");
 		} else {
 			printf("Get RFID : ");
 			for(int i =0; i<6;i++){
 				Serial.print(client_rfid[i],HEX);
 			}
 			printf("\n\r");
+			switchOnLed("blue");
 
 			if(!getUserCode()) {
 				printf("No user code given\n\r");
@@ -243,18 +284,24 @@ void loop() {
 					Serial.print(user_code[i]);
 				}
 				printf("\n\r");
+				switchOnLed("yellow");
 
 				printf("%i\n\r", user_code_byte);
 
 				if(canWithdraw()) {
-					printf("Ok withdraw");
+					printf("Ok withdraw\n\r");
+					switchOnLed("green");
+					delay(3000);
 				} else {
-					printf("No withdraw");
+					printf("No withdraw\n\r");
+					switchOnLed("red");
+					delay(3000);
 				}
 			}
 		}
 	}
 
+	switchOffLed();
 	printf("Go to sleep\n\r");
 	sleepNow();
 }
