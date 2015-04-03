@@ -45,6 +45,8 @@ IRQ -> 2
 */
 
 /* RFID */
+const int RFID_ACTIVATE = 6; // OUTPUT 1 TO ACTIVATE THE LED
+
 const int RFID_IN = 7; //final version will use pin 0 (serial)
 const int RFID_OUT = 8;//final version will use pin 1 (without serial.begin, it makes them unusable)
 
@@ -77,10 +79,15 @@ void setup(void) {
 
 	pinMode(BUTTON_PIN1, INPUT);
 	pinMode(BUTTON_PIN2, INPUT);
+
+	pinMode(RFID_ACTIVATE, OUTPUT);
+
   
 	int BIKE_ID = 8;//will read EEPROM after
 	rf_core = new RFCore(BIKE_ID, false);
 	pixels.begin();
+
+	disableRFID();
 }
 
 void switchButtonsInterrupts(boolean on) { //TRUE for ON, FALSE for off
@@ -170,7 +177,17 @@ boolean getRFID() {
 		actual_time = millis();
 		delay(50);
 	}
+	disableRFID();
 	return received;
+}
+
+
+void enableRFID() {
+	digitalWrite(RFID_ACTIVATE, HIGH);
+}
+
+void disableRFID() {
+	digitalWrite(RFID_ACTIVATE, LOW);
 }
 
 /**
@@ -262,6 +279,8 @@ void loop() {
 	if(terminal_in_range) {
 		printf("Terminal in range!\n\r");
 		switchOnLed("white");
+
+		enableRFID();
 		delay(500);
 
 		if (!getRFID()) {
