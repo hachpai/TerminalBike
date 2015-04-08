@@ -14,6 +14,10 @@
 const int BUTTON_PIN1 = 14; //A0
 const int BUTTON_PIN2 = 15; //A1
 
+const int MOTOR_PIN1 = A2; //A2
+const int MOTOR_PIN2 = A3; //A3
+const int MOTOR_ENABLE = A4; //A4
+
 /* LED */
 const int LED_PIN = 5; // NeoPixel
 /*
@@ -56,6 +60,7 @@ const int USER_CODE_TIMEOUT = 10000; //10 sec to type the code
 const int USER_CODE_LENGTH = 4;
 const int MAX_ATTEMPT_TO_SEND_DATA = 3; // number attempts to send data to the born/terminal
 const int DELAY_ATTEMPT_TO_SEND_DATA = 300; // 0.3 sec to wait between 2 attemps of sending data to the born/terminal
+const int MOTOR_MOVEMENT_DELAY = 500;
 
 bool terminal_in_range = false;
 
@@ -82,6 +87,9 @@ void setup(void) {
 
 	pinMode(RFID_ACTIVATE, OUTPUT);
 
+	pinMode(MOTOR_PIN1, OUTPUT);
+    pinMode(MOTOR_PIN2, OUTPUT);
+    pinMode(MOTOR_ENABLE, OUTPUT);
   
 	int BIKE_ID = 8;//will read EEPROM after
 	rf_core = new RFCore(BIKE_ID, false);
@@ -188,6 +196,37 @@ void enableRFID() {
 
 void disableRFID() {
 	digitalWrite(RFID_ACTIVATE, LOW);
+}
+
+
+void openLock() {
+    Serial.print("openLock \n\r"); 
+    digitalWrite(MOTOR_ENABLE, HIGH);
+
+    delay(20);
+
+    digitalWrite(MOTOR_PIN1, HIGH); // set pin 2 on L293D low
+    digitalWrite(MOTOR_PIN2, LOW);
+
+    delay(MOTOR_MOVEMENT_DELAY);
+    Serial.print("fin \n\r"); 
+    
+    digitalWrite(MOTOR_ENABLE, LOW);
+}
+
+void closeLock() {
+    Serial.print("closeLock \n\r"); 
+    digitalWrite(MOTOR_ENABLE, HIGH);
+
+    delay(20);
+
+    digitalWrite(MOTOR_PIN1, LOW); // set pin 2 on L293D low
+    digitalWrite(MOTOR_PIN2, HIGH);
+
+    delay(MOTOR_MOVEMENT_DELAY);
+    Serial.print("fin \n\r"); 
+    
+    digitalWrite(MOTOR_ENABLE, LOW);
 }
 
 /**
@@ -310,7 +349,9 @@ void loop() {
 				if(canWithdraw()) {
 					printf("Ok withdraw\n\r");
 					switchOnLed("green");
+					openLock();
 					delay(3000);
+					closeLock();
 				} else {
 					printf("No withdraw\n\r");
 					switchOnLed("red");
