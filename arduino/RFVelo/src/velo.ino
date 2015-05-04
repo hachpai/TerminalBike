@@ -270,7 +270,7 @@ boolean getUserCode(){
 					user_code_byte = user_code_byte << 1;
 				}
 
-				delay(200); //to avoid contact bounce
+				delay(300); //to avoid contact bounce
 				switchOnLed("blue");
 			}
 			else if(button_state2 == HIGH && button_state1 == LOW){
@@ -284,11 +284,13 @@ boolean getUserCode(){
 					user_code_byte = user_code_byte << 1;
 				}
 
-				delay(200); //to avoid contact bounce
+				delay(300); //to avoid contact bounce
 				switchOnLed("blue");
 			}
 			buttons_released = false;
 		}
+
+		delay(300);
 	}
 	return (index_key == USER_CODE_LENGTH);
 }
@@ -310,6 +312,7 @@ boolean canWithdraw() {
 }
 
 void loop() {
+	switchOnLed("orange");
 	terminal_in_range = rf_core->rangeTest();
 	printf("Awake\n\r");
 
