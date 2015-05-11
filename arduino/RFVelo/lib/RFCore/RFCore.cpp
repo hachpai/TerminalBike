@@ -6,7 +6,7 @@ volatile int irq1,irq2,irq3;
 volatile int session_counter=0;
 RF24 radio(9,10);
 
-const int TIMEOUT=3000;
+const int TIMEOUT_DELAY=3000;
 
 #define range_test_pipe_terminal 0xBBBBABCD01LL //0xBBBBABCD71LL
 #define handshake_pipe_terminal 0xBBBBABCD03LL
@@ -61,12 +61,17 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically alloc
 }
 
 bool RFCore::sendPacket(unsigned char *packet){
-  //radio.stopListening();
-  //IMPORTANT:putting the RF chip in txmode avoid an rx interrupt, resulting in inchorent data in data
-  //(interruption of the for)
+  radio.stopListening();
+  if(is_terminal){
+    //terminal need to be in session
+    if(!in_session){
+      return false;
+    }
+    openWritingPipe(start_bike_pipe+id);
+    
 
-  //radio.startWrite( &data[0], sizeof(unsigned char) ,0);
-  // to let the time at the other arduino to treat the datas
+  }
+
 }
 
 bool RFCore::getPacket(unsigned char *packet){
@@ -83,8 +88,8 @@ bool RFCore::handShake(){
   while(!ping_pong)
   {
     int time_now = millis();
-    if((time_now-time_start) > TIMEOUT){
-      printf("TIMEOUT\n\r");
+    if((time_now-time_start) > TIMEOUT_DELAY){
+      printf("TIMEOUT_DELAY\n\r");
       return false;
     }
     radio.stopListening();
@@ -129,8 +134,8 @@ bool RFCore::rangeTest()
     while(!ping_pong)
     {
       int time_now = millis();
-      if((time_now-time_start) > TIMEOUT){
-        printf("TIMEOUT\n\r");
+      if((time_now-time_start) > TIMEOUT_DELAY){
+        printf("TIMEOUT_DELAY\n\r");
         return false;
       }
       radio.stopListening();
@@ -180,8 +185,8 @@ void RFCore::closeSession(){
   while(!ping_pong)
   {
     int time_now = millis();
-    if((time_now-time_start) > TIMEOUT*10){
-      printf("TIMEOUT SO BAD!!\n\r");
+    if((time_now-time_start) > TIMEOUT_DELAY*10){
+      printf("TIMEOUT_DELAY SO BAD!!\n\r");
     }
     radio.stopListening();
     radio.write(&closing_session_code,sizeof(closing_session_code));
