@@ -8,6 +8,9 @@ RF24 radio(9,10);
 
 const int TIMEOUT_DELAY=3000;
 
+const int MAX_ATTEMPT_TO_SEND_DATA = 4;
+const int DELAY_ATTEMPT_TO_SEND_DATA = 300;
+
 #define range_test_pipe_terminal 0xBBBBABCD01LL //0xBBBBABCD71LL
 #define handshake_pipe_terminal 0xBBBBABCD03LL
 #define session_pipe_terminal 0xBBBBABCD05LL //for sessions pair to pair communication
@@ -18,6 +21,9 @@ bool is_terminal;
 char success_code[]  = "OK";
 char success_logout_code[]  = "OKLO";
 char busy_code[] = "KO";
+
+char withdraw_code[] = "WIOK";
+char no_withdraw_code[] = "WINO";
 
 unsigned int bike_id;
 void printPipe();
@@ -48,15 +54,15 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically alloc
     radio.openReadingPipe(1,start_bike_pipe+bike_id);
   }
 
-  if(is_terminal){
+  if(is_terminal) {
     radio.startListening(); // Start listening
   }
 
-
   radio.printDetails(); // Dump the configuration of the rf unit for debugging
-  if(is_terminal){//only the terminal listen passively to radio
+  if(is_terminal) {//only the terminal listen passively to radio
     //attachInterrupt(0, check_radio, LOW);
   }
+<<<<<<< HEAD
 
 }
 
@@ -75,18 +81,18 @@ bool RFCore::sendPacket(unsigned char *packet){
 }
 
 bool RFCore::getPacket(unsigned char *packet){
+=======
+>>>>>>> 056059b83d671c9f50cf407e20546e80b755126d
 }
 
 bool RFCore::handShake(){
-
   char data_received[3];
   radio.stopListening();
   radio.openWritingPipe(handshake_pipe_terminal);
   bool ping_pong=false;
   printf("Handshaking...");
   int time_start=millis();
-  while(!ping_pong)
-  {
+  while(!ping_pong) {
     int time_now = millis();
     if((time_now-time_start) > TIMEOUT_DELAY){
       printf("TIMEOUT_DELAY\n\r");
@@ -97,73 +103,119 @@ bool RFCore::handShake(){
 
     radio.startListening();
     delay(20);
-    if(!radio.available())
-    {
+    if(!radio.available()) {
       printf(".");
-    }
-    else{
+    } else {
       ping_pong=true;
     }
   }
   printf("\n\r");
-  while(radio.available())
-  {
+  while(radio.available()) {
     char data_received[3];
     radio.read( &data_received, sizeof(data_received));
     printf("Got response in HANDSHAKE %s\n\r",data_received);
-    if(strcmp(data_received,success_code)==0)
-    {
-
+    if(strcmp(data_received,success_code)==0) {
       return true;
     }
-
   }
-
 }
 
+int RFCore::withdrawPermission(byte button_code, void* rfid_code)
+{
+  byte* rfid_code_byte = reinterpret_cast<byte*>(rfid_code);
+
+  if (!is_terminal) {
+    delay(20);
+    byte data_to_rm;
+    radio.startListening();
+    while(radio.available()) {
+      radio.read(&data_to_rm, sizeof(data_to_rm));
+      delay(5);
+    }
+
+    radio.stopListening(); // First, stop listening so we can talk.
+    radio.openWritingPipe(session_pipe_terminal);
+
+    byte data_to_send[7];
+    data_to_send[0] = button_code;
+    for(int i=0; i < 6; i++) {
+      data_to_send[i + 1] = rfid_code_byte[i];
+    }
+
+    char terminal_response[5];
+    bool has_response = false;
+    int attemp_number = 0;
+
+    while(attemp_number < MAX_ATTEMPT_TO_SEND_DATA &&  !has_response) {
+      printf("------%i---\n\r", attemp_number);
+
+      radio.stopListening();
+      radio.write(&data_to_send, sizeof(data_to_send));
+      radio.startListening();
+      delay(20);
+
+      attemp_number = attemp_number + 1;
+      delay(DELAY_ATTEMPT_TO_SEND_DATA);
+
+      printf("- before hasData\n\r");
+      if(radio.available()) {
+        radio.read(&terminal_response, sizeof(terminal_response));
+
+        if(strcmp(terminal_response,"WIOK")==0) {
+          printf("Ok for withdraw\n\r");
+          return 1; // ok withdraw
+        }        
+
+        if(strcmp(terminal_response,"WINO")==0) {
+          printf("No for withdraw\n\r");
+          return -1; // ok withdraw
+        } 
+      }
+    }
+
+    printf("No response from the born\n\r");
+    return 0;
+  }
+}
 
 bool RFCore::rangeTest()
 {
-  if (!is_terminal)
-  {
+  if (!is_terminal) {
     radio.stopListening(); // First, stop listening so we can talk.
     radio.openWritingPipe(range_test_pipe_terminal);
     bool ping_pong=false;
     printf("Range testing...");
     int time_start=millis();
-    while(!ping_pong)
-    {
+    while(!ping_pong) {
       int time_now = millis();
+<<<<<<< HEAD
       if((time_now-time_start) > TIMEOUT_DELAY){
         printf("TIMEOUT_DELAY\n\r");
+=======
+      if((time_now-time_start) > TIMEOUT) {
+        printf("TIMEOUT\n\r");
+>>>>>>> 056059b83d671c9f50cf407e20546e80b755126d
         return false;
       }
       radio.stopListening();
       radio.write( &bike_id, sizeof(bike_id));
       radio.startListening();
       delay(20);
-      if(!radio.available())
-      {
-
+      if(!radio.available()) {
         printf(".");
-
       }
-      else{
+      else {
         ping_pong=true;
       }
-
     }
     printf("\n\r");
-    while(radio.available())
-    {
+    while(radio.available()) {
       char response[3];
-
       radio.read( &response, sizeof(response));
       if(strcmp(response,success_code)==0 || strcmp(response,busy_code)==0){//terminal reply with a busy or free code, range passed
         printf("Well received in range test:%s\n\r",response);
         return true;
       }
-
     }
     return false;
   }
@@ -182,31 +234,37 @@ void RFCore::closeSession(){
   radio.stopListening();
   radio.openWritingPipe(session_pipe_terminal);
 
+<<<<<<< HEAD
   while(!ping_pong)
   {
     int time_now = millis();
     if((time_now-time_start) > TIMEOUT_DELAY*10){
       printf("TIMEOUT_DELAY SO BAD!!\n\r");
     }
+=======
+  while(!ping_pong) {
+>>>>>>> 056059b83d671c9f50cf407e20546e80b755126d
     radio.stopListening();
     radio.write(&closing_session_code,sizeof(closing_session_code));
     radio.startListening();
     delay(20);
-    if(!radio.available())
-    {
-
-      printf(".");
-
-    }
-    else{
+    if(!radio.available()) {
+      int time_now = millis();
+      if((time_now-time_start) > TIMEOUT){
+        printf("TIMEOUT SO BAD!!\n\r");
+        printf("METTESION SESSION A FAUX");
+        ping_pong = true;
+      } else {
+        printf(".");
+      }
+    } else {
       char response[5];
       radio.read(&response,sizeof(response));
       printf("RECEIVED: %s\n\r",response);
-      if(strcmp(response,success_logout_code)==0){
+      if(strcmp(response,success_logout_code)==0) {
         ping_pong=true;
         printf("Log out success!!\n\r");
       }
-
     }
   }
   printf("\n\r");
@@ -217,74 +275,92 @@ void RFCore::printSessionCounter()
   printf("Session Counter: %d , irq1 %d, irq2 %d, irq3:%d\n\r",session_counter,irq1,irq2,irq3);
 }
 
-
 void RFCore::checkRadioNoIRQ(void)
 {
   uint8_t pipe_number;
 
-  while(radio.available(&pipe_number))
-  {
+  while(radio.available(&pipe_number)) {
     printf("data on pipe %u, in session:%d\n\r",pipe_number,in_session);
     //last_pipe= pipeNo;
     switch(pipe_number){
-
       case 1: //range_test pipe
-      if(is_terminal){
-        unsigned int _id;
-        radio.read(&_id,sizeof(_id));
-        radio.stopListening();
-        radio.openWritingPipe(start_bike_pipe+_id);
-        //printf("id received:%d",id);
-        if(in_session){
-
-          radio.write(&busy_code,sizeof(busy_code)); //send the bike that the terminal is busy
+        if(is_terminal){
+          unsigned int _id;
+          radio.read(&_id,sizeof(_id));
+          radio.stopListening();
+          radio.openWritingPipe(start_bike_pipe+_id);
+          //printf("id received:%d",id);
+          if(in_session){
+            radio.write(&busy_code,sizeof(busy_code)); //send the bike that the terminal is busy
+          }
+          else{ //terminal is busy
+            radio.write(&success_code,sizeof(success_code));
+          }
+          radio.startListening();
         }
-        else{ //terminal is busy
-          radio.write(&success_code,sizeof(success_code));
-        }
-        radio.startListening();
-      }
-      break;
+        break;
       case 2: //handshake pipe (init session)
-      if(is_terminal){
-        unsigned int _id;
-        radio.read(&_id,sizeof(_id));
-        radio.stopListening();
-        radio.openWritingPipe(start_bike_pipe+_id);
-        if(in_session  && !(_id == bike_id)){ //terminal is busy and a NEW bike is asking for a session
-          radio.write(&busy_code,sizeof(busy_code)); //send the bike that the terminal is busy
+        if(is_terminal){
+          unsigned int _id;
+          radio.read(&_id,sizeof(_id));
+          radio.stopListening();
+          radio.openWritingPipe(start_bike_pipe+_id);
+          if(in_session  && !(_id == bike_id)){ //terminal is busy and a NEW bike is asking for a session
+            radio.write(&busy_code,sizeof(busy_code)); //send the bike that the terminal is busy
+          }
+          else{ //terminal accept a handshake, or the bike didn't receive the confirmation
+            if(radio.write(&success_code,sizeof(success_code))){
+              bike_id = _id;
+              in_session=true;
+            }
+
+          }
+          radio.startListening();
+
         }
-        else{ //terminal accept a handshake, or the bike didn't receive the confirmation
-          if(radio.write(&success_code,sizeof(success_code))){
-            bike_id = _id;
-            in_session=true;
+        break;
+      case 3: //session pipe
+        uint8_t data[8]; //8 bytes = payload of uint64_t
+        /*CODE
+        LO = log out, WD = withdraw, RT= return
+        packet is [2 bytes CODE,(5 bytes RFID),(byte user code)] = 8 bytes of data (payload size)
+        */
+        radio.read(&data,sizeof(data));
+        printf("- 3 - - - Received %s \n\r",data);
+
+        //WARNING: check the complete data array for ['L','O']
+        if(data[0]=='L' && data[1]=='O'){//for log out code in session
+          printf("Received %s,  ACK FOR LO, SEND BACK %s ON PIPE %lu.\n\r",data,success_logout_code,start_bike_pipe+bike_id);
+          in_session=false;
+          radio.stopListening();
+          radio.openWritingPipe(start_bike_pipe+bike_id);
+          //printf("id received:%d",id);
+          radio.write(&success_logout_code,sizeof(success_logout_code)); //notice successful logout to bike
+        }
+        else{
+          printf("---- Received DATA : ");
+          for(int i =0; i<6;i++){
+            printf("-%x-",data[i]);
+          }
+          printf("\n\r");
+
+          if(data[0] == 0x0) {
+            printf("--- Withdraw Accepted 1111 ---\n\r");
+            radio.stopListening();
+            radio.openWritingPipe(start_bike_pipe+bike_id);
+            radio.write(&withdraw_code,sizeof(withdraw_code));
+          } else if (data[0] == 0xF) {
+            printf("--- BBBBBUUUUGGG NOT DATA SEND --- 2222 ---\n\r");
+          } else {
+            printf("--- Withdraw Rejected ---\n\r");
+            radio.stopListening();
+            radio.openWritingPipe(start_bike_pipe+bike_id);
+            radio.write(&no_withdraw_code,sizeof(no_withdraw_code));
           }
 
+          //here we receive RFID+user code and check DB. If authorized, send confirmation code for unlocking
         }
-        radio.startListening();
-
-      }
-      break;
-      case 3: //session pipe
-      uint8_t data[8]; //8 bytes = payload of uint64_t
-      /*CODE
-      LO = log out, WD = withdraw, RT= return
-      packet is [2 bytes CODE,(5 bytes RFID),(byte user code)] = 8 bytes of data (payload size)
-      */
-      radio.read(&data,sizeof(data));
-      //WARNING: check the complete data array for ['L','O']
-      if(data[0]=='L' && data[1]=='O'){//for log out code in session
-        printf("Received %s,  ACK FOR LO, SEND BACK %s ON PIPE %lu.\n\r",data,success_logout_code,start_bike_pipe+bike_id);
-        in_session=false;
-        radio.stopListening();
-        radio.openWritingPipe(start_bike_pipe+bike_id);
-        //printf("id received:%d",id);
-        radio.write(&success_logout_code,sizeof(success_logout_code)); //notice successful logout to bike
-      }
-      else{
-        //here we receive RFID+user code and check DB. If authorized, send confirmation code for unlocking
-      }
-      break;
+        break;
     }
     radio.startListening();
     //radio.read( &bike_id_received, sizeof(int) );
