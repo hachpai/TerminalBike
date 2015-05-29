@@ -1,6 +1,5 @@
 #include "printf.h"
 #include "RFCore.h"
-#include <Servo.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
 

@@ -6,7 +6,7 @@ volatile int irq1,irq2,irq3;
 volatile int session_counter=0;
 RF24 radio(9,10);
 
-const int TIMEOUT=3000;
+const int TIMEOUT_DELAY=3000;
 
 const int MAX_ATTEMPT_TO_SEND_DATA = 4;
 const int DELAY_ATTEMPT_TO_SEND_DATA = 300;
@@ -62,6 +62,27 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically alloc
   if(is_terminal) {//only the terminal listen passively to radio
     //attachInterrupt(0, check_radio, LOW);
   }
+<<<<<<< HEAD
+
+}
+
+bool RFCore::sendPacket(unsigned char *packet){
+  radio.stopListening();
+  if(is_terminal){
+    //terminal need to be in session
+    if(!in_session){
+      return false;
+    }
+    openWritingPipe(start_bike_pipe+id);
+    
+
+  }
+
+}
+
+bool RFCore::getPacket(unsigned char *packet){
+=======
+>>>>>>> 056059b83d671c9f50cf407e20546e80b755126d
 }
 
 bool RFCore::handShake(){
@@ -73,8 +94,8 @@ bool RFCore::handShake(){
   int time_start=millis();
   while(!ping_pong) {
     int time_now = millis();
-    if((time_now-time_start) > TIMEOUT){
-      printf("TIMEOUT\n\r");
+    if((time_now-time_start) > TIMEOUT_DELAY){
+      printf("TIMEOUT_DELAY\n\r");
       return false;
     }
     radio.stopListening();
@@ -167,8 +188,13 @@ bool RFCore::rangeTest()
     int time_start=millis();
     while(!ping_pong) {
       int time_now = millis();
+<<<<<<< HEAD
+      if((time_now-time_start) > TIMEOUT_DELAY){
+        printf("TIMEOUT_DELAY\n\r");
+=======
       if((time_now-time_start) > TIMEOUT) {
         printf("TIMEOUT\n\r");
+>>>>>>> 056059b83d671c9f50cf407e20546e80b755126d
         return false;
       }
       radio.stopListening();
@@ -208,7 +234,16 @@ void RFCore::closeSession(){
   radio.stopListening();
   radio.openWritingPipe(session_pipe_terminal);
 
+<<<<<<< HEAD
+  while(!ping_pong)
+  {
+    int time_now = millis();
+    if((time_now-time_start) > TIMEOUT_DELAY*10){
+      printf("TIMEOUT_DELAY SO BAD!!\n\r");
+    }
+=======
   while(!ping_pong) {
+>>>>>>> 056059b83d671c9f50cf407e20546e80b755126d
     radio.stopListening();
     radio.write(&closing_session_code,sizeof(closing_session_code));
     radio.startListening();
