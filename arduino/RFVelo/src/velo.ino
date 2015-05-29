@@ -49,7 +49,7 @@ IRQ -> 2
 */
 
 /* RFID */
-const int RFID_ACTIVATE = 6; // OUTPUT 1 TO ACTIVATE THE LED
+const int RFID_ACTIVATE = 6; // OUTPUT 1 TO ACTIVATE THE RFID
 
 const int RFID_IN = 7; //final version will use pin 0 (serial)
 const int RFID_OUT = 8;//final version will use pin 1 (without serial.begin, it makes them unusable)
@@ -79,7 +79,7 @@ void setup(void) {
 	Serial.begin(57600);
 
 	MCUCR = (1<<ISC01) | (1<<ISC00); //01 and 00 for triggering interrupts on change at low level
-  
+
 	printf_begin();
 
 	pinMode(BUTTON_PIN1, INPUT);
@@ -88,9 +88,9 @@ void setup(void) {
 	pinMode(RFID_ACTIVATE, OUTPUT);
 
 	pinMode(MOTOR_PIN1, OUTPUT);
-    pinMode(MOTOR_PIN2, OUTPUT);
-    pinMode(MOTOR_ENABLE, OUTPUT);
-  
+	pinMode(MOTOR_PIN2, OUTPUT);
+	pinMode(MOTOR_ENABLE, OUTPUT);
+
 	int BIKE_ID = 8;//will read EEPROM after
 	rf_core = new RFCore(BIKE_ID, false);
 	pixels.begin();
@@ -146,8 +146,8 @@ void switchOffLed() {
 }
 
 /**
- * Set the bike in sleep mod. The bike is awaked when a button is pressed.
- */
+* Set the bike in sleep mod. The bike is awaked when a button is pressed.
+*/
 void sleepNow() {
 	//http://donalmorrissey.blogspot.com.es/2010/04/putting-arduino-diecimila-to-sleep.html
 	switchButtonsInterrupts(true);
@@ -160,22 +160,20 @@ void sleepNow() {
 	// Set sleep enable (SE) bit:
 	sleep_enable();
 	//
-	// Put the device to sleep:
-	digitalWrite(13,LOW);   // turn LED off to indicate sleep
+
 	sleep_mode();
 	//
 	// Upon waking up, sketch continues from this point.
 
 	sleep_disable();
-	digitalWrite(13,HIGH);   // turn LED on to indicate awake
 }
 
 /**
- * Try to read the RFID Data. There is a timeout given by RFID_TIMEOUT
- *
- * Return true if RFID code whare read (the data is stored in client_rfid)
- * return false otherwise
- */
+* Try to read the RFID Data. There is a timeout given by RFID_TIMEOUT
+*
+* Return true if RFID code whare read (the data is stored in client_rfid)
+* return false otherwise
+*/
 boolean getRFID() {
 	int actual_time= millis();
 	int initial_time = actual_time;
@@ -200,44 +198,44 @@ void disableRFID() {
 
 
 void openLock() {
-    Serial.print("openLock \n\r"); 
-    digitalWrite(MOTOR_ENABLE, HIGH);
+	Serial.print("openLock \n\r");
+	digitalWrite(MOTOR_ENABLE, HIGH);
 
-    delay(20);
+	delay(20);
 
-    digitalWrite(MOTOR_PIN1, HIGH); // set pin 2 on L293D low
-    digitalWrite(MOTOR_PIN2, LOW);
+	digitalWrite(MOTOR_PIN1, HIGH); // set pin 2 on L293D low
+	digitalWrite(MOTOR_PIN2, LOW);
 
-    delay(MOTOR_MOVEMENT_DELAY);
-    Serial.print("fin \n\r"); 
-    
-    digitalWrite(MOTOR_ENABLE, LOW);
+	delay(MOTOR_MOVEMENT_DELAY);
+	Serial.print("fin \n\r");
+
+	digitalWrite(MOTOR_ENABLE, LOW);
 }
 
 void closeLock() {
-    Serial.print("closeLock \n\r"); 
-    digitalWrite(MOTOR_ENABLE, HIGH);
+	Serial.print("closeLock \n\r");
+	digitalWrite(MOTOR_ENABLE, HIGH);
 
-    delay(20);
+	delay(20);
 
-    digitalWrite(MOTOR_PIN1, LOW); // set pin 2 on L293D low
-    digitalWrite(MOTOR_PIN2, HIGH);
+	digitalWrite(MOTOR_PIN1, LOW); // set pin 2 on L293D low
+	digitalWrite(MOTOR_PIN2, HIGH);
 
-    delay(MOTOR_MOVEMENT_DELAY);
-    Serial.print("fin \n\r"); 
-    
-    digitalWrite(MOTOR_ENABLE, LOW);
+	delay(MOTOR_MOVEMENT_DELAY);
+	Serial.print("fin \n\r");
+
+	digitalWrite(MOTOR_ENABLE, LOW);
 }
 
 /**
- * Try to get the User Code. 
- * This function is customized by the following constants :
- * - USER_CODE_TIMEOUT : timeout (in milliseconds)
- * - USER_CODE_LENGTH : the lenth of the code
- *
- * Return true if the code is read and store the variable in the variable user_code
- * Return false otherwise
- */
+* Try to get the User Code.
+* This function is customized by the following constants :
+* - USER_CODE_TIMEOUT : timeout (in milliseconds)
+* - USER_CODE_LENGTH : the lenth of the code
+*
+* Return true if the code is read and store the variable in the variable user_code
+* Return false otherwise
+*/
 boolean getUserCode(){
 	int button_state1=LOW,button_state2=LOW,index_key=0;
 	int actual_time= millis();
@@ -324,7 +322,7 @@ void loop() {
 
 		if (!getRFID()) {
 			printf("No RFID given\n\r");
-				switchOnLed("red");
+			switchOnLed("red");
 		} else {
 			printf("Get RFID : ");
 			for(int i =0; i<6;i++){
@@ -337,7 +335,7 @@ void loop() {
 				printf("No user code given\n\r");
 			} else {
 				printf("User code given : ");
-				
+
 				for(int i =0; i<USER_CODE_LENGTH;i++){
 					Serial.print(user_code[i]);
 				}
