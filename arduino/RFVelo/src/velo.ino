@@ -14,17 +14,17 @@
 const int BUTTON_PIN1 = 14; //A0
 const int BUTTON_PIN2 = 15; //A1
 
-const int MOTOR_PIN1 = A2; //A2
+const int MOTOR_PIN1 = A4; //A4
 const int MOTOR_PIN2 = A3; //A3
-const int MOTOR_ENABLE = A4; //A4
+const int MOTOR_ENABLE = 5; //A2
+const int BUTTON_MOTOR_STOP_OPEN = 3;
+const int BUTTON_MOTOR_STOP_CLOSE = 4;
+const int MOTOR_SPEED = 200; //100
+
+const int MOTOR_MOVEMENT_TIMEOUT = 250;
 
 /* LED */
-const int LED_PIN = 5; // NeoPixel
-/*
-const int RED_PIN = 5;
-const int GREEN_PIN = 6;
-const int BLUE_PIN = 7;
-*/
+const int LED_PIN = 6; // NeoPixel
 
 /* RF
 black module config: http://www.seeedstudio.com/document/pics/Interface.jpg
@@ -49,7 +49,7 @@ IRQ -> 2
 */
 
 /* RFID */
-const int RFID_ACTIVATE = 6; // OUTPUT 1 TO ACTIVATE THE LED
+const int RFID_ACTIVATE = A2; // OUTPUT 1 TO ACTIVATE THE LED
 
 const int RFID_IN = 7; //final version will use pin 0 (serial)
 const int RFID_OUT = 8;//final version will use pin 1 (without serial.begin, it makes them unusable)
@@ -199,34 +199,59 @@ void disableRFID() {
 }
 
 
-void openLock() {
-    Serial.print("openLock \n\r"); 
-    digitalWrite(MOTOR_ENABLE, HIGH);
+void actionLock(bool open) {
+    int actual_time= millis();
+    int initial_time = actual_time;
+    bool button_pressed = false;
 
+    if(open) {
+        Serial.print("openLock - \n\r"); 
+    } else {
+        Serial.print("closeLock - \n\r"); 
+    }
+
+    analogWrite(MOTOR_ENABLE, MOTOR_SPEED);
+    //digitalWrite(MOTOR_ENABLE,HIGH);
+    //Serial.print("%i - \n\r", MOTOR_SPEED); 
     delay(20);
 
-    digitalWrite(MOTOR_PIN1, HIGH); // set pin 2 on L293D low
-    digitalWrite(MOTOR_PIN2, LOW);
+    if(open) {
+        digitalWrite(MOTOR_PIN1, HIGH); // set pin 2 on L293D low
+        digitalWrite(MOTOR_PIN2, LOW);
+    } else {
+        digitalWrite(MOTOR_PIN1, LOW); // set pin 2 on L293D low
+        digitalWrite(MOTOR_PIN2, HIGH);
+    }
 
-    delay(MOTOR_MOVEMENT_DELAY);
+    while((actual_time-initial_time) < MOTOR_MOVEMENT_TIMEOUT && ! button_pressed) {
+        actual_time= millis();
+
+        int button_open = digitalRead(BUTTON_MOTOR_STOP_OPEN);
+        int button_close = digitalRead(BUTTON_MOTOR_STOP_CLOSE);
+
+        if(button_open== HIGH && open) {
+            Serial.print("open pressed - \n\r"); 
+            button_pressed = true;
+        }
+
+        if(button_close == HIGH && (!open)) {
+            Serial.print("close pressed - \n\r"); 
+            button_pressed = true;
+        }
+    }
+
     Serial.print("fin \n\r"); 
     
-    digitalWrite(MOTOR_ENABLE, LOW);
+    analogWrite(MOTOR_ENABLE, LOW);
+}
+
+
+void openLock() {
+    actionLock(true);
 }
 
 void closeLock() {
-    Serial.print("closeLock \n\r"); 
-    digitalWrite(MOTOR_ENABLE, HIGH);
-
-    delay(20);
-
-    digitalWrite(MOTOR_PIN1, LOW); // set pin 2 on L293D low
-    digitalWrite(MOTOR_PIN2, HIGH);
-
-    delay(MOTOR_MOVEMENT_DELAY);
-    Serial.print("fin \n\r"); 
-    
-    digitalWrite(MOTOR_ENABLE, LOW);
+    actionLock(false);
 }
 
 /**
@@ -355,6 +380,7 @@ void loop() {
 					openLock();
 					delay(3000);
 					closeLock();
+					delay(500);
 				} else {
 					printf("No withdraw\n\r");
 					switchOnLed("red");
