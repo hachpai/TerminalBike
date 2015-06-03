@@ -4,15 +4,20 @@
 
 #include <SoftwareSerial.h>
 
-SoftwareSerial RIFDSerial = SoftwareSerial(2,3); 
+SoftwareSerial RIFDSerial = SoftwareSerial(7,8); 
 
 void setup() {
   Serial.begin(9600);   // connect to the serial port
   
   RIFDSerial.begin(9600);
+  pinMode(A2, OUTPUT);
 }
 
 void loop () {
+  int r,g,b = 0;
+  if(Serial.read()=='O'){
+  digitalWrite(A2, HIGH);
+  }  
   byte i = 0;
   byte val = 0;
   byte code[6];

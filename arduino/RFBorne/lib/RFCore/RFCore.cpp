@@ -6,6 +6,7 @@ volatile int irq1,irq2,irq3;
 volatile int session_counter=0;
 RF24 radio(9,10);
 
+
 const int TIMEOUT_DELAY=3000;
 
 #define range_test_pipe_terminal 0xBBBBABCD01LL //0xBBBBABCD71LL
@@ -22,7 +23,7 @@ char busy_code[] = "KO";
 unsigned int bike_id;
 void printPipe();
 
-RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically allocate arrays to enlarge lib capacity
+RFCore::RFCore(unsigned int _id, bool _is_terminal) 
 {
   bike_id = _id;
   is_terminal = _is_terminal;
@@ -60,6 +61,8 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal) //we could dynamically alloc
 
 }
 
+
+
 bool RFCore::sendPacket(unsigned char *packet){
   radio.stopListening();
   if(is_terminal){
@@ -67,14 +70,14 @@ bool RFCore::sendPacket(unsigned char *packet){
     if(!in_session){
       return false;
     }
-    openWritingPipe(start_bike_pipe+id);
-    
-
+    radio.openWritingPipe(start_bike_pipe+bike_id);
   }
 
 }
 
 bool RFCore::getPacket(unsigned char *packet){
+  radio.startListening();
+  //do timeout operations here
 }
 
 bool RFCore::handShake(){
@@ -401,6 +404,14 @@ if( tx || fail ){
 radio.startListening();
 Serial.println(tx ? F("Send:OK") : F("Send:Fail"));
 }*/
+
+void RFCore::powerDownRadio(){
+  radio.powerDown();
+}
+void RFCore::powerUpRadio(){
+  radio.powerUp();
+  delay(10); // up to 5ms to get the chip back to life. 10 for security
+}
 
 void RFCore::debug(){ //WARNING: this functions introduce strange effect, see history file.
   /*Serial.println("-------RF DEBUG-----------");

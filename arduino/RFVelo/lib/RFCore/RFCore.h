@@ -8,11 +8,9 @@
 #define CSN_PIN 10
 
 /**PIN MAP
-
 2 4 6 8 10
 1 3 5 7 9
 	_
-
 GND 2->GND
 3V3	 1->3V3
 CE 5->9
@@ -20,7 +18,6 @@ CSN	 10->10
 SCK	 9->13
 MOSI	 8->11
 MISO	 7->12
-
 **/
 
 #define PAYLOAD_SIZE 8 // size of the data part, 9 bytes: [NUM_PACKET,8 bytes of data]
@@ -54,11 +51,16 @@ class RFCore
 
 		/**
 		 * Return true if the bike and born/terminal are close enought to communicate
-		 */    
+		 */
 		void closeSession(); // stop the hand shake (ie. the bike says it has finish to communicate withe the born/terminal)
 		void checkRadioNoIRQ();
-		
-		int withdrawPermission(byte, void*);
+    bool sendPacket(unsigned char *packet);
+    bool getPacket(unsigned char *packet);
+
+    void powerDownRadio();
+    void powerUpRadio();
+
+	//	int withdrawPermission(unsigned char, void*);
 	private:
 		static void check_radio(void);
 };
