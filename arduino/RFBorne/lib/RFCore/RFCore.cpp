@@ -23,7 +23,7 @@ char busy_code[] = "KO";
 unsigned int bike_id;
 void printPipe();
 
-RFCore::RFCore(unsigned int _id, bool _is_terminal) 
+RFCore::RFCore(unsigned int _id, bool _is_terminal)
 {
   bike_id = _id;
   is_terminal = _is_terminal;
@@ -63,14 +63,26 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal)
 
 
 
-bool RFCore::sendPacket(unsigned char *packet){
-  radio.stopListening();
+bool RFCore::sendPacket(uint8_t *packet){
+  radio.stopListening(); // First, stop listening so we can talk.
   if(is_terminal){
     //terminal need to be in session
     if(!in_session){
       return false;
     }
     radio.openWritingPipe(start_bike_pipe+bike_id);
+  }
+  else{
+    //printf("PACKET SIZE:%d",sizeof(packet));
+    for(int i =0; i<8;i++){
+      printf("%u ",packet[i]);
+    }
+    printf("\n\r");
+    if(in_session){
+      radio.openWritingPipe(session_pipe_terminal);
+      radio.write(packet,sizeof(uint64_t));
+    }
+
   }
 
 }
@@ -116,7 +128,7 @@ bool RFCore::handShake(){
     printf("Got response in HANDSHAKE %s\n\r",data_received);
     if(strcmp(data_received,success_code)==0)
     {
-
+      in_session=true;
       return true;
     }
 
@@ -207,6 +219,7 @@ void RFCore::closeSession(){
       printf("RECEIVED: %s\n\r",response);
       if(strcmp(response,success_logout_code)==0){
         ping_pong=true;
+        in_session=false;
         printf("Log out success!!\n\r");
       }
 
@@ -285,7 +298,16 @@ void RFCore::checkRadioNoIRQ(void)
         radio.write(&success_logout_code,sizeof(success_logout_code)); //notice successful logout to bike
       }
       else{
-        //here we receive RFID+user code and check DB. If authorized, send confirmation code for unlocking
+        printf("Received user code and rfid:");
+        for(int i=0; i<7;i++){
+          printf("%u ",data[i]);
+        }
+        printf("\n\r");
+        /*radio.stopListening();
+        radio.openWritingPipe(start_bike_pipe+bike_id);
+        //printf("id received:%d",id);
+        radio.write(&success_code,sizeof(success_code)); //notice successful logout to bike
+        //here we receive RFID+user code and check DB. If authorized, send confirmation code for unlocking*/
       }
       break;
     }

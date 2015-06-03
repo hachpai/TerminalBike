@@ -354,7 +354,19 @@ boolean getUserCode(){
 boolean canWithdraw() {
 	if(rf_core->handShake()) {
 		printf("Success handshake!\n\r");
-		printf("Sending data\n\r");
+
+		uint8_t user_datas[8];
+		for(int i =0; i<6;i++){
+			user_datas[i]=client_rfid[i];
+		}
+		user_datas[6]= user_code_byte;
+		user_datas[7]= 0;
+		//user_datas[7]= '\O';
+
+		while(true){
+			rf_core->sendPacket(user_datas);
+			delay(200);
+		}
 
 		//int response = rf_core->withdrawPermission(user_code_byte, &client_rfid);
 		int response = 0;

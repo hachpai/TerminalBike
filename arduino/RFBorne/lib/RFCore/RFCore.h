@@ -54,7 +54,7 @@ class RFCore
 		 */
 		void closeSession(); // stop the hand shake (ie. the bike says it has finish to communicate withe the born/terminal)
 		void checkRadioNoIRQ();
-    bool sendPacket(unsigned char *packet);
+    bool sendPacket(uint8_t *packet);
     bool getPacket(unsigned char *packet);
 
     void powerDownRadio();
