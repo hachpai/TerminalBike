@@ -96,7 +96,7 @@ String byteArrayToString(byte *byteArray, int byteArraySize) {
 
 
 // ------------------------ PGM ------------------ //
-SoftwareSerial RFIDSerial = SoftwareSerial(8,9);
+SoftwareSerial RFIDSerial = SoftwareSerial(7,8);
 int led = 13;
 
 void setup() {
@@ -110,15 +110,7 @@ void loop () {
   if(rFIDRead(&RFIDSerial, &rFIDCode[0])) {    
     serialPrintLine(byteArrayToString(&rFIDCode[0], 5));
     delay(100);
-    String userCode = "";
-    if(serialReadLine(userCode)) {
-      serialPrintLine(userCode);
-      if (userCode == "0111") {
-        digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
-        delay(1000);               // wait for a second
-        digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
-        delay(1000); 
-      }
+  
     }
     /*
     char inputByte;

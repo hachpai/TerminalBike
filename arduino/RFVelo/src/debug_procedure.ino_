@@ -1,0 +1,95 @@
+void test_LED(){
+while(true){
+  for(int i=0; i<7;i++)
+  {
+    switchLed(COLOUR_OFF+i);
+    delay(1000);
+  }
+}
+}
+
+  void test_button(){
+  while(true){
+		getUserCode();
+		printf("User code given : ");
+		for(int i =0; i<USER_CODE_LENGTH;i++){
+			Serial.print(user_code[i]);
+		}
+	}
+  }
+void switchLed(int color) {
+	int r,g,b;
+	r=g=b= 0;
+	/*int r= 0;
+	int g= 0;
+	int b = 0;*/
+
+	switch(color){
+		case COLOUR_RED:
+		r = 255;
+		break;
+		case COLOUR_YELLOW:
+		r = 255;
+		g = 255;
+		break;
+		case COLOUR_ORANGE:
+		r = 255;
+		g = 128;
+		break;
+		case COLOUR_GREEN:
+		g=255;
+		break;
+		case COLOUR_BLUE:
+		b=255;
+		break;
+		case COLOUR_WHITE:
+		r=g=b=255;
+		break;
+
+		default:
+		case COLOUR_OFF:
+		r=g=b= 0;
+	}
+	printf("LED COLOR %d - R: %d G: %d B: %d \n\r",color,r,g,b);
+	pixels.setPixelColor(0, pixels.Color(r,g,b));
+	pixels.show();
+}
+
+boolean buttonDEBUG(){
+	int button_state1=LOW,button_state2=LOW,index_key=0;
+	int actual_time= millis();
+	int initial_time = actual_time;
+	boolean buttons_released =false;
+	while((actual_time-initial_time) < USER_CODE_TIMEOUT && index_key < USER_CODE_LENGTH){
+		actual_time = millis();
+		button_state1 = digitalRead(BUTTON_PIN1);
+		button_state2 = digitalRead(BUTTON_PIN2);
+
+		if(button_state1== LOW && button_state2 == LOW){ // if both buttons are released
+			buttons_released = true;
+			digitalWrite(BUTTON_PIN1,LOW);
+
+		}
+		//check if user has released the buttons and if only one is pressed
+		else if(buttons_released && (button_state1== HIGH ^ button_state2 == HIGH))
+		{
+			// verify which button is pressed and if not both are pressed
+			Serial.println("INSIDE!");
+			if (button_state1 == HIGH && button_state2 == LOW) {
+				Serial.println("INSIDE 1!");
+				user_code[index_key] = 1;
+				index_key++;
+				delay(200); //to avoid contact bounce
+			}
+			else if(button_state2 == HIGH && button_state1 == LOW){
+				Serial.println("INSIDE 2!");
+				user_code[index_key] = 2;
+				index_key++;
+				delay(200); //to avoid contact bounce
+			}
+			buttons_released = false;
+
+		}
+	}
+	return (index_key == USER_CODE_LENGTH);
+}

@@ -3,24 +3,47 @@
 // GND <->
 
 #include <SoftwareSerial.h>
-
-SoftwareSerial RIFDSerial = SoftwareSerial(2,3); 
+#include <Servo.h> 
+ 
+Servo myservo;  // create servo object to control a servo 
+                // twelve servo objects can be created on most boards
+SoftwareSerial RIFDSerial = SoftwareSerial(8,8); 
 
 void setup() {
   Serial.begin(9600);   // connect to the serial port
   
   RIFDSerial.begin(9600);
+  //pinMode(A2, OUTPUT);
+  pinMode(7,OUTPUT);
+  pinMode(3,OUTPUT);
 }
-
+char val;
 void loop () {
+  val=' ';
+  int r,g,b = 0;
+  if (Serial.available())
+  {
+     val= Serial.read();
+  }
+  if(val=='O'){
+    digitalWrite(3, HIGH);
+    Serial.println("RFID ACTIVATED");
+  }  
+       myservo.write(90);              // tell servo to go to position in variable 'pos' 
+  if(val=='T'){
+     myservo.write(9);              // tell servo to go to position in variable 'pos' 
+     Serial.println("SERVO POSITIONED");
+     delay(1000);
+  }  
   byte i = 0;
   byte val = 0;
   byte code[6];
   byte checksum = 0;
   byte bytesread = 0;
   byte tempbyte = 0;
- 
+  bool lightState=0; 
   if(RIFDSerial.available() > 0) {
+    digitalWrite(7,HIGH);
     if((val = RIFDSerial.read()) == 2) {                  // check for header 
       bytesread = 0; 
       while (bytesread < 12) {                        // read 10 digit code + 2 digit checksum

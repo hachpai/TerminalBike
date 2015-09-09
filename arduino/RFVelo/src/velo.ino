@@ -9,23 +9,6 @@
 /************************/
 /** PINs configuration **/
 /************************/
-
-/* Button */
-const int BUTTON_PIN1 = 14; //A0
-const int BUTTON_PIN2 = 15; //A1
-
-const int MOTOR_PIN1 = A4; //A4
-const int MOTOR_PIN2 = A3; //A3
-const int MOTOR_ENABLE = 5; //A2
-const int BUTTON_MOTOR_STOP_OPEN = 3;
-const int BUTTON_MOTOR_STOP_CLOSE = 4;
-const int MOTOR_SPEED = 200; //100
-
-const int MOTOR_MOVEMENT_TIMEOUT = 250;
-
-/* LED */
-const int LED_PIN = 6; // NeoPixel
-
 /* RF
 black module config: http://www.seeedstudio.com/document/pics/Interface.jpg
 1 - GND       |8 7 |
@@ -47,6 +30,15 @@ MISO ->12
 SCK ->13
 IRQ -> 2
 */
+/* Buttons */
+const int BUTTON_PIN1 = 14; //A0
+const int BUTTON_PIN2 = 15; //A1
+/* Locker */
+const int MOTOR_PIN1 = A4; //A4
+const int MOTOR_PIN2 = A3; //A3
+const int MOTOR_ENABLE = 5; //A2
+const int BUTTON_MOTOR_STOP_OPEN = 3;
+const int BUTTON_MOTOR_STOP_CLOSE = 4;
 
 /* RFID */
 const int RFID_ACTIVATE = A2; // OUTPUT 1 TO ACTIVATE THE LED
@@ -54,13 +46,34 @@ const int RFID_ACTIVATE = A2; // OUTPUT 1 TO ACTIVATE THE LED
 const int RFID_IN = 7; //final version will use pin 0 (serial)
 const int RFID_OUT = 8;//final version will use pin 1 (without serial.begin, it makes them unusable)
 
-/*others constants*/
+/* LED */
+const int LED_PIN = 6; // NeoPixel
+
+/************************/
+/** ARBITRARY CONSTANTS**/
+/************************/
+/*LED COLOURS*/
+const int COLOUR_OFF=0;
+const int COLOUR_RED=1;
+const int COLOUR_YELLOW=2;
+const int COLOUR_ORANGE=3;
+const int COLOUR_GREEN=4;
+const int COLOUR_BLUE=5;
+const int COLOUR_WHITE=6;
+//MOTOR
+
 const int RFID_TIMEOUT = 10000; //10 sec to put the rfid card
+const int DEBOUNCE_DELAY =200;
 const int USER_CODE_TIMEOUT = 10000; //10 sec to type the code
 const int USER_CODE_LENGTH = 4;
 const int MAX_ATTEMPT_TO_SEND_DATA = 3; // number attempts to send data to the born/terminal
 const int DELAY_ATTEMPT_TO_SEND_DATA = 300; // 0.3 sec to wait between 2 attemps of sending data to the born/terminal
 const int MOTOR_MOVEMENT_DELAY = 500;
+const int MOTOR_MOVEMENT_TIMEOUT = 250;
+
+const int MOTOR_SPEED = 200; //100
+/***********************************/
+
 
 bool terminal_in_range = false;
 
@@ -94,78 +107,103 @@ void setup(void) {
 	int BIKE_ID = 8;//will read EEPROM after
 	rf_core = new RFCore(BIKE_ID, false);
 	pixels.begin();
-
+	interrupts();
+	switchButtonsInterrupts(false);
 	disableRFID();
 }
 
-void switchButtonsInterrupts(boolean on) { //TRUE for ON, FALSE for off
-	/* Pin to interrupt map:
-	* D0-D7 = PCINT 16-23 = PCIE2 = pcmsk2
-	* D8-D13 = PCINT 0-5 = PCIE0 = pcmsk0
-	* A0-A5 (D14-D19) = PCINT 8-13 = PCIE1 = pcmsk1*/
-	//interrupt on analog PIN A0 y A1
-	if(on) { //enable interrupts
-		PCICR |= (1<<PCIE1);
-		PCMSK1 |= (1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
-		PCMSK1 |= (1<<PCINT9); //9 for A1
+void loop() {
+
+	//sleepNow();
+	printf("AWAKE!\n\r");
+
+	terminal_in_range = rf_core->rangeTest();
+	//rf_core->debug();
+
+	if(terminal_in_range) {
+		printf("Terminal in range!\n\r");
+		switchLed(COLOUR_WHITE);
+		enableRFID();
+		delay(500);
+		bool rfid_user_received=getRFID();
+		disableRFID();
+		if (!rfid_user_received) {
+			printf("No RFID given\n\r");
+			switchLed(COLOUR_RED);
+		} else {
+			printf("Get RFID : ");
+			for(int i =0; i<6;i++){
+				Serial.print(client_rfid[i],HEX);
+			}
+			printf("\n\r");
+			switchLed(COLOUR_BLUE);
+
+			if(!getUserCode()) {
+				printf("No user code given\n\r");
+			} else {
+				printf("User code given : ");
+
+				for(int i =0; i<USER_CODE_LENGTH;i++){
+					Serial.print(user_code[i]);
+				}
+				printf("\n\r");
+				switchLed(COLOUR_YELLOW);
+
+				printf("%i\n\r", user_code_byte);
+
+				if(canWithdraw()) {
+					printf("Ok withdraw\n\r");
+					switchLed(COLOUR_GREEN);
+					openLock();
+					delay(3000);
+					closeLock();
+					delay(500);
+				} else {
+					printf("No withdraw\n\r");
+					switchLed(COLOUR_RED);
+					delay(3000);
+				}
+			}
+		}
 	}
-	else {//disable interrupts
-		PCICR &= ~(1<<PCIE1);
-		PCMSK1 &= ~(1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
-		PCMSK1 &= ~(1<<PCINT9); //9 for A1
-	}
+
+	switchLed(COLOUR_OFF);
+	printf("Go to sleep\n\r");
+	sleepNow();
 }
 
-void switchOnLed(char* color) {
-	int r = 0;
-	int g = 0;
-	int b = 0;
-
-	//Red
-	if(color == "red" or color == "yellow" or color == "orange" or color == "white") {
+void switchLed(int color) {
+	int r,g,b;
+	r=g=b=0;
+	switch(color){
+		case COLOUR_RED:
 		r = 255;
-	}
-	//Green
-	if (color == "green" or color == "yellow" or color == "white") {
+		break;
+		case COLOUR_YELLOW:
+		r = 255;
 		g = 255;
-	} else if(color == "orange") {
+		break;
+		case COLOUR_ORANGE:
+		r = 255;
 		g = 128;
-	}
-	//Blue
-	if (color == "blue" or color == "white") {
-		b = 255;
-	}
+		break;
+		case COLOUR_GREEN:
+		g=255;
+		break;
+		case COLOUR_BLUE:
+		b=255;
+		break;
+		case COLOUR_WHITE:
+		r=g=b=255;
+		break;
 
+		default:
+		case COLOUR_OFF:
+		r=g=b= 0;
+	}
+	//printf("LED COLOR %d - R: %d G: %d B: %d \n\r",color,r,g,b);
 	pixels.setPixelColor(0, pixels.Color(r,g,b));
 	pixels.show();
-}
-
-void switchOffLed() {
-	pixels.setPixelColor(0, pixels.Color(0,0,0));
-	pixels.show();
-}
-
-/**
-* Set the bike in sleep mod. The bike is awaked when a button is pressed.
-*/
-void sleepNow() {
-	//http://donalmorrissey.blogspot.com.es/2010/04/putting-arduino-diecimila-to-sleep.html
-	switchButtonsInterrupts(true);
-	delay(100);
-	// Choose our preferred sleep mode:
-	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-	//
-	//interrupts();
-	//
-	// Set sleep enable (SE) bit:
-	sleep_enable();
-	//
-
-	sleep_mode();
-	//
-	// Upon waking up, sketch continues from this point.
-
-	sleep_disable();
 }
 
 /**
@@ -183,7 +221,6 @@ boolean getRFID() {
 		actual_time = millis();
 		delay(50);
 	}
-	disableRFID();
 	return received;
 }
 
@@ -196,60 +233,63 @@ void disableRFID() {
 	digitalWrite(RFID_ACTIVATE, LOW);
 }
 
+/********************/
+/* LOCKER FUNCTIONS  */
+/********************/
 
 void actionLock(bool open) {
-    int actual_time= millis();
-    int initial_time = actual_time;
-    bool button_pressed = false;
+	int actual_time= millis();
+	int initial_time = actual_time;
+	bool button_pressed = false;
 
-    if(open) {
-        Serial.print("openLock - \n\r"); 
-    } else {
-        Serial.print("closeLock - \n\r"); 
-    }
+	if(open) {
+		Serial.print("openLock - \n\r");
+	} else {
+		Serial.print("closeLock - \n\r");
+	}
 
-    analogWrite(MOTOR_ENABLE, MOTOR_SPEED);
-    //digitalWrite(MOTOR_ENABLE,HIGH);
-    //Serial.print("%i - \n\r", MOTOR_SPEED); 
-    delay(20);
+	analogWrite(MOTOR_ENABLE, MOTOR_SPEED);
+	//digitalWrite(MOTOR_ENABLE,HIGH);
+	//Serial.print("%i - \n\r", MOTOR_SPEED);
+	delay(20);
 
-    if(open) {
-        digitalWrite(MOTOR_PIN1, HIGH); // set pin 2 on L293D low
-        digitalWrite(MOTOR_PIN2, LOW);
-    } else {
-        digitalWrite(MOTOR_PIN1, LOW); // set pin 2 on L293D low
-        digitalWrite(MOTOR_PIN2, HIGH);
-    }
+	if(open) {
+		digitalWrite(MOTOR_PIN1, HIGH); // set pin 2 on L293D low
+		digitalWrite(MOTOR_PIN2, LOW);
+	} else {
+		digitalWrite(MOTOR_PIN1, LOW); // set pin 2 on L293D low
+		digitalWrite(MOTOR_PIN2, HIGH);
+	}
 
-    while((actual_time-initial_time) < MOTOR_MOVEMENT_TIMEOUT && ! button_pressed) {
-        actual_time= millis();
+	while((actual_time-initial_time) < MOTOR_MOVEMENT_TIMEOUT && ! button_pressed) {
+		actual_time= millis();
 
-        int button_open = digitalRead(BUTTON_MOTOR_STOP_OPEN);
-        int button_close = digitalRead(BUTTON_MOTOR_STOP_CLOSE);
+		int button_open = digitalRead(BUTTON_MOTOR_STOP_OPEN);
+		int button_close = digitalRead(BUTTON_MOTOR_STOP_CLOSE);
 
-        if(button_open== HIGH && open) {
-            Serial.print("open pressed - \n\r"); 
-            button_pressed = true;
-        }
+		if(button_open== HIGH && open) {
+			Serial.print("open pressed - \n\r");
+			button_pressed = true;
+		}
 
-        if(button_close == HIGH && (!open)) {
-            Serial.print("close pressed - \n\r"); 
-            button_pressed = true;
-        }
-    }
+		if(button_close == HIGH && (!open)) {
+			Serial.print("close pressed - \n\r");
+			button_pressed = true;
+		}
+	}
 
-    Serial.print("fin \n\r"); 
-    
-    analogWrite(MOTOR_ENABLE, LOW);
+	Serial.print("fin \n\r");
+
+	analogWrite(MOTOR_ENABLE, LOW);
 }
 
 
 void openLock() {
-    actionLock(true);
+	actionLock(true);
 }
 
 void closeLock() {
-    actionLock(false);
+	actionLock(false);
 }
 
 /**
@@ -281,25 +321,19 @@ boolean getUserCode(){
 		else if(buttons_released && (button_state1== HIGH ^ button_state2 == HIGH))
 		{
 			// verify which button is pressed and if not both are pressed
-			Serial.println("INSIDE!");
 			if (button_state1 == HIGH && button_state2 == LOW) {
-				switchOffLed();
-				Serial.println("INSIDE 1!");
-				user_code[index_key] = 1;
+				user_code[index_key] = 0;
 				index_key++;
 
 				user_code_byte = user_code_byte | 0X0;
 				if(index_key != USER_CODE_LENGTH) {
 					user_code_byte = user_code_byte << 1;
 				}
-
-				delay(300); //to avoid contact bounce
-				switchOnLed("blue");
+				switchLed(COLOUR_BLUE);
 			}
 			else if(button_state2 == HIGH && button_state1 == LOW){
-				switchOffLed();
-				Serial.println("INSIDE 2!");
-				user_code[index_key] = 2;
+				switchLed(COLOUR_OFF);
+				user_code[index_key] = 1;
 				index_key++;
 
 				user_code_byte = user_code_byte | 0X1;
@@ -307,13 +341,12 @@ boolean getUserCode(){
 					user_code_byte = user_code_byte << 1;
 				}
 
-				delay(300); //to avoid contact bounce
-				switchOnLed("blue");
+
+				switchLed(COLOUR_BLUE);
 			}
 			buttons_released = false;
+			delay(DEBOUNCE_DELAY); //to avoid contact bounce
 		}
-
-		delay(300);
 	}
 	return (index_key == USER_CODE_LENGTH);
 }
@@ -321,10 +354,22 @@ boolean getUserCode(){
 boolean canWithdraw() {
 	if(rf_core->handShake()) {
 		printf("Success handshake!\n\r");
-		printf("Sending data\n\r");
 
-		int response = rf_core->withdrawPermission(user_code_byte, &client_rfid);
+		uint8_t user_datas[8];
+		for(int i =0; i<6;i++){
+			user_datas[i]=client_rfid[i];
+		}
+		user_datas[6]= user_code_byte;
+		user_datas[7]= 0;
+		//user_datas[7]= '\O';
 
+		while(true){
+			rf_core->sendPacket(user_datas);
+			delay(200);
+		}
+
+		//int response = rf_core->withdrawPermission(user_code_byte, &client_rfid);
+		int response = 0;
 		printf("response : %i\n\r", response);
 
 		rf_core->closeSession();
@@ -334,61 +379,52 @@ boolean canWithdraw() {
 	return false;
 }
 
-void loop() {
-	switchOnLed("orange");
-	terminal_in_range = rf_core->rangeTest();
-	printf("Awake\n\r");
 
-	//rf_core->debug();
+/********************/
+/* SLEEP FUNCTIONS  */
+/********************/
 
-	if(terminal_in_range) {
-		printf("Terminal in range!\n\r");
-		switchOnLed("white");
+ISR(PCINT1_vect) { //WARNING: comment the ISR(PCINT1_vect) definition in SofwareSerial.cpp
+	switchButtonsInterrupts(false); //disable interrupt on buttons, arduino is awake, that avoid the interrupt to fire after wake.
+}
+/**
+* Set the bike in sleep mod. The bike is awaked when a button is pressed.
+*/
 
-		enableRFID();
-		delay(500);
+void sleepNow() {
+	//http://donalmorrissey.blogspot.com.es/2010/04/putting-arduino-diecimila-to-sleep.html
+	switchButtonsInterrupts(true); //activate interupt on button
+	delay(100);
+	rf_core->powerDownRadio();
+	// Choose our preferred sleep mode:
+	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+	//
+	//interrupts();
+	//
+	// Set sleep enable (SE) bit:
+	sleep_enable();
+	//
 
-		if (!getRFID()) {
-			printf("No RFID given\n\r");
-			switchOnLed("red");
-		} else {
-			printf("Get RFID : ");
-			for(int i =0; i<6;i++){
-				Serial.print(client_rfid[i],HEX);
-			}
-			printf("\n\r");
-			switchOnLed("blue");
-
-			if(!getUserCode()) {
-				printf("No user code given\n\r");
-			} else {
-				printf("User code given : ");
-
-				for(int i =0; i<USER_CODE_LENGTH;i++){
-					Serial.print(user_code[i]);
-				}
-				printf("\n\r");
-				switchOnLed("yellow");
-
-				printf("%i\n\r", user_code_byte);
-
-				if(canWithdraw()) {
-					printf("Ok withdraw\n\r");
-					switchOnLed("green");
-					openLock();
-					delay(3000);
-					closeLock();
-					delay(500);
-				} else {
-					printf("No withdraw\n\r");
-					switchOnLed("red");
-					delay(3000);
-				}
-			}
-		}
+	sleep_mode();
+	//
+	// Upon waking up, sketch continues from this point.
+	rf_core->powerUpRadio();
+	sleep_disable();
+}
+void switchButtonsInterrupts(boolean on) { //TRUE for ON, FALSE for off
+	/* Pin to interrupt map:
+	* D0-D7 = PCINT 16-23 = PCIE2 = pcmsk2
+	* D8-D13 = PCINT 0-5 = PCIE0 = pcmsk0
+	* A0-A5 (D14-D19) = PCINT 8-13 = PCIE1 = pcmsk1*/
+	//interrupt on analog PIN A0 y A1
+	if(on) { //enable interrupts
+		PCICR |= (1<<PCIE1);
+		PCMSK1 |= (1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
+		PCMSK1 |= (1<<PCINT9); //9 for A1
 	}
-
-	switchOffLed();
-	printf("Go to sleep\n\r");
-	sleepNow();
+	else {//disable interrupts
+		PCICR &= ~(1<<PCIE1);
+		PCMSK1 &= ~(1<<PCINT8); //8 for A0 pin change mask get loaded a pin change interrupt on A0.
+		PCMSK1 &= ~(1<<PCINT9); //9 for A1
+	}
 }
