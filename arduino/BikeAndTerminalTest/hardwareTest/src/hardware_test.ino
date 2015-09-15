@@ -169,8 +169,8 @@ void servoTest(){
   delay(1000);                       // waits 15ms for the servo to reach the position
   locker_motor.write(90);              // tell servo to go to position in variable 'pos'
   delay(1000);                       // waits 15ms for the servo to reach the position
-  locker_motor.write(180);              // tell servo to go to position in variable 'pos'
-  delay(1000);
+  //locker_motor.write(180);              // tell servo to go to position in variable 'pos'
+  //delay(1000);
 }
 
 void LEDTest(){
