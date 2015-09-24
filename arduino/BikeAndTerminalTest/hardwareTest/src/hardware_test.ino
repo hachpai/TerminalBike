@@ -11,7 +11,7 @@ char test_mode='0';
 /******************************/
 /*     PINs CONFIGURATION     */
 /******************************/
-
+/* boutons */
 const int BUTTON_PIN1 = 14; //A0
 const int BUTTON_PIN2 = 15; //A1
 /* Locker */
@@ -164,7 +164,6 @@ void RFIDTest(){
 }
 
 void servoTest(){
-  delay(1000);
   locker_motor.write(5);              // tell servo to go to position in variable 'pos'
   delay(1000);                       // waits 15ms for the servo to reach the position
   locker_motor.write(90);              // tell servo to go to position in variable 'pos'
