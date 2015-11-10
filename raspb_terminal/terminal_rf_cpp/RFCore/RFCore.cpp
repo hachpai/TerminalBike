@@ -4,7 +4,8 @@ volatile uint8_t in_session=false;
 volatile int irq1,irq2,irq3;
 
 volatile int session_counter=0;
-RF24 radio(9,10);
+RF24 radio(22,0);
+
 
 
 const int TIMEOUT_DELAY=3000;
@@ -19,6 +20,8 @@ bool is_terminal;
 char success_code[]  = "OK";
 char success_logout_code[]  = "OKLO";
 char busy_code[] = "KO";
+
+uint8_t session_data[8]; //8 bytes = payload of uint64_t
 
 unsigned int bike_id;
 void printPipe();
@@ -52,9 +55,6 @@ RFCore::RFCore(unsigned int _id, bool _is_terminal)
   if(is_terminal){
     radio.startListening(); // Start listening
   }
-
-
-  radio.printDetails(); // Dump the configuration of the rf unit for debugging
   if(is_terminal){//only the terminal listen passively to radio
     //attachInterrupt(0, check_radio, LOW);
   }
@@ -71,10 +71,10 @@ bool RFCore::sendPacket(uint8_t *packet){
       return false;
     }
     radio.openWritingPipe(start_bike_pipe+bike_id);
+    return radio.write(packet,sizeof(uint64_t));
   }
   else{
     //printf("PACKET SIZE:%d",sizeof(packet));
-    //printf("Message of size %d send:",sizeof(uint64_t));
     for(int i =0; i<8;i++){
       printf("%u ",packet[i]);
     }
@@ -87,22 +87,12 @@ bool RFCore::sendPacket(uint8_t *packet){
   return false;
 }
 
-bool RFCore::getPacket(unsigned char *packet){
-  radio.startListening();
-  delay(50);
-  bool received=false;
-  if(radio.available()){
-    received=true;
-    radio.read(packet, sizeof(uint64_t));
-  }
-  radio.stopListening();
-  return received;
-  //do timeout operations here
-}
+// bool RFCore::waitPacket(unsigned char *packet){
+//   radio.startListening();
+//   //do timeout operations here
+// }
 
 bool RFCore::handShake(){
-
-  char data_received[3];
   radio.stopListening();
   radio.openWritingPipe(handshake_pipe_terminal);
   bool ping_pong=false;
@@ -139,9 +129,8 @@ bool RFCore::handShake(){
       in_session=true;
       return true;
     }
-
   }
-
+  return true;
 }
 
 
@@ -188,8 +177,8 @@ bool RFCore::rangeTest()
       }
 
     }
-    return false;
   }
+  return false;
 }
 
 void RFCore::closeSession(){
@@ -241,6 +230,17 @@ void RFCore::printSessionCounter()
   printf("Session Counter: %d , irq1 %d, irq2 %d, irq3:%d\n\r",session_counter,irq1,irq2,irq3);
 }
 
+bool RFCore::inSession(){
+  return in_session;
+}
+int RFCore::getBikeId(){
+  return bike_id;
+}
+void RFCore::getSessionData(uint8_t *buf){
+  for(int i=0; i<7;i++){
+    buf[i]=session_data[i];
+  }
+}
 
 void RFCore::checkRadioNoIRQ(void)
 {
@@ -275,83 +275,61 @@ void RFCore::checkRadioNoIRQ(void)
         radio.read(&_id,sizeof(_id));
         radio.stopListening();
         radio.openWritingPipe(start_bike_pipe+_id);
+        //IMPORTANT: here we accept handshake if the bike is new and we're out of session
+        // OR: We're in session but the same bike ask again.
         if(in_session  && !(_id == bike_id)){ //terminal is busy and a NEW bike is asking for a session
           radio.write(&busy_code,sizeof(busy_code)); //send the bike that the terminal is busy
         }
         else{ //terminal accept a handshake, or the bike didn't receive the confirmation
-          if(radio.write(&success_code,sizeof(success_code))){
-            bike_id = _id;
-            in_session=true;
-          }
+        radio.write(&success_code,sizeof(success_code));
+        bike_id = _id;
+        in_session=true;
+      }
+      radio.startListening();
 
-        }
-        radio.startListening();
-
-      }
-      break;
-      case 3: //session pipe
-      uint8_t data[8]; //8 bytes = payload of uint64_t
-      /*CODE
-      LO = log out, WD = withdraw, RT= return
-      packet is [2 bytes CODE,(5 bytes RFID),(byte user code)] = 8 bytes of data (payload size)
-      */
-      radio.read(&data,sizeof(data));
-      //WARNING: check the complete data array for ['L','O']
-      if(data[0]=='L' && data[1]=='O'){//for log out code in session
-        printf("Received %s,  ACK FOR LO, SEND BACK %s ON PIPE %lu.\n\r",data,success_logout_code,start_bike_pipe+bike_id);
-        in_session=false;
-        radio.stopListening();
-        radio.openWritingPipe(start_bike_pipe+bike_id);
-        //printf("id received:%d",id);
-        radio.write(&success_logout_code,sizeof(success_logout_code)); //notice successful logout to bike
-      }
-      else{
-        printf("Received user code and rfid:");
-        for(int i=0; i<7;i++){
-          printf("%u ",data[i]);
-        }
-        printf("\n\r");
-        /*radio.stopListening();
-        radio.openWritingPipe(start_bike_pipe+bike_id);
-        //printf("id received:%d",id);
-        radio.write(&success_code,sizeof(success_code)); //notice successful logout to bike
-        //here we receive RFID+user code and check DB. If authorized, send confirmation code for unlocking*/
-      }
-      break;
     }
-    radio.startListening();
-    //radio.read( &bike_id_received, sizeof(int) );
+    break;
+    case 3: //session pipe
+    uint8_t data[8]; //8 bytes = payload of uint64_t
+    /*CODE
+    LO = log out, WD = withdraw, RT= return
+    packet is [2 bytes CODE,(5 bytes RFID),(byte user code)] = 8 bytes of data (payload size)
+    */
+    radio.read(&data,sizeof(data));
+    //WARNING: check the complete data array for ['L','O']
+    if(data[0]=='L' && data[1]=='O'){//for log out code in session
+      printf("Received %s,  ACK FOR LO, SEND BACK %s ON PIPE %llu.\n\r",data,success_logout_code,start_bike_pipe+bike_id);
+      in_session=false;
+      //erasing data
+      for(int i=0; i<7;i++){
+        session_data[i]=0;
+      }
+      radio.stopListening();
+      radio.openWritingPipe(start_bike_pipe+bike_id);
+      //printf("id received:%d",id);
+      radio.write(&success_logout_code,sizeof(success_logout_code)); //notice successful logout to bike
+    }
+    else{
+      printf("Received user code and rfid:");
+      for(int i=0; i<7;i++){
+        session_data[i]=data[i];
+        printf("%u ",data[i]);
+      }
+      printf("\n\r");
+      /*radio.stopListening();
+      radio.openWritingPipe(start_bike_pipe+bike_id);
+      //printf("id received:%d",id);
+      radio.write(&success_code,sizeof(success_code)); //notice successful logout to bike
+      //here we receive RFID+user code and check DB. If authorized, send confirmation code for unlocking*/
+    }
+    break;
   }
-  //return true;
+  radio.startListening();
+  //radio.read( &bike_id_received, sizeof(int) );
+}
+//return true;
 }
 
-void RFCore::powerDownRadio(){
-  radio.powerDown();
-}
-void RFCore::powerUpRadio(){
-  radio.powerUp();
-  delay(10); // up to 5ms to get the chip back to life. 10 for security
-}
-
-void RFCore::debug(){ //WARNING: this functions introduce strange effect, see history file.
-  /*Serial.println("-------RF DEBUG-----------");
-  Serial.print("radio channel:");
-  Serial.println(radio.channel);
-  Serial.print("radio mode:");
-  Serial.println(radio.mode);
-  Serial.print("Local address:");
-  Serial.println(radio.localAddress);
-  Serial.print("Remote address:");
-  Serial.println(radio.remoteAddress);*/
-  radio.printDetails();
-  Serial.print("Packet received counter:");
-
-  Serial.print("Packet missed received queries counter:");
-  Serial.println("something");
-
-  printf("--------------------------\n\r");
-}
-/*END DEBUG*/
 // void RFCore::check_radio(void)
 // {
 //
@@ -461,3 +439,31 @@ if( tx || fail ){
 radio.startListening();
 Serial.println(tx ? F("Send:OK") : F("Send:Fail"));
 }*/
+
+void RFCore::powerDownRadio(){
+  radio.powerDown();
+}
+void RFCore::powerUpRadio(){
+  radio.powerUp();
+  delay(10); // up to 5ms to get the chip back to life. 10 for security
+}
+
+void RFCore::debug(){ //WARNING: this functions introduce strange effect, see history file.
+  /*Serial.println("-------RF DEBUG-----------");
+  Serial.print("radio channel:");
+  Serial.println(radio.channel);
+  Serial.print("radio mode:");
+  Serial.println(radio.mode);
+  Serial.print("Local address:");
+  Serial.println(radio.localAddress);
+  Serial.print("Remote address:");
+  Serial.println(radio.remoteAddress);*/
+  radio.printDetails();
+  /*Serial.print("Packet received counter:");
+
+  Serial.print("Packet missed received queries counter:");
+  Serial.println("something");
+
+  printf("--------------------------\n\r");*/
+}
+/*END DEBUG*/

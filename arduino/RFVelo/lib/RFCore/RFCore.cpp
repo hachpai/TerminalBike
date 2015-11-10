@@ -74,21 +74,29 @@ bool RFCore::sendPacket(uint8_t *packet){
   }
   else{
     //printf("PACKET SIZE:%d",sizeof(packet));
+    //printf("Message of size %d send:",sizeof(uint64_t));
     for(int i =0; i<8;i++){
       printf("%u ",packet[i]);
     }
     printf("\n\r");
     if(in_session){
       radio.openWritingPipe(session_pipe_terminal);
-      radio.write(packet,sizeof(uint64_t));
+      return radio.write(packet,sizeof(uint64_t));
     }
-
   }
-
+  return false;
 }
 
 bool RFCore::getPacket(unsigned char *packet){
   radio.startListening();
+  delay(50);
+  bool received=false;
+  if(radio.available()){
+    received=true;
+    radio.read(packet, sizeof(uint64_t));
+  }
+  radio.stopListening();
+  return received;
   //do timeout operations here
 }
 
@@ -317,6 +325,33 @@ void RFCore::checkRadioNoIRQ(void)
   //return true;
 }
 
+void RFCore::powerDownRadio(){
+  radio.powerDown();
+}
+void RFCore::powerUpRadio(){
+  radio.powerUp();
+  delay(10); // up to 5ms to get the chip back to life. 10 for security
+}
+
+void RFCore::debug(){ //WARNING: this functions introduce strange effect, see history file.
+  /*Serial.println("-------RF DEBUG-----------");
+  Serial.print("radio channel:");
+  Serial.println(radio.channel);
+  Serial.print("radio mode:");
+  Serial.println(radio.mode);
+  Serial.print("Local address:");
+  Serial.println(radio.localAddress);
+  Serial.print("Remote address:");
+  Serial.println(radio.remoteAddress);*/
+  radio.printDetails();
+  Serial.print("Packet received counter:");
+
+  Serial.print("Packet missed received queries counter:");
+  Serial.println("something");
+
+  printf("--------------------------\n\r");
+}
+/*END DEBUG*/
 // void RFCore::check_radio(void)
 // {
 //
@@ -426,31 +461,3 @@ if( tx || fail ){
 radio.startListening();
 Serial.println(tx ? F("Send:OK") : F("Send:Fail"));
 }*/
-
-void RFCore::powerDownRadio(){
-  radio.powerDown();
-}
-void RFCore::powerUpRadio(){
-  radio.powerUp();
-  delay(10); // up to 5ms to get the chip back to life. 10 for security
-}
-
-void RFCore::debug(){ //WARNING: this functions introduce strange effect, see history file.
-  /*Serial.println("-------RF DEBUG-----------");
-  Serial.print("radio channel:");
-  Serial.println(radio.channel);
-  Serial.print("radio mode:");
-  Serial.println(radio.mode);
-  Serial.print("Local address:");
-  Serial.println(radio.localAddress);
-  Serial.print("Remote address:");
-  Serial.println(radio.remoteAddress);*/
-  radio.printDetails();
-  Serial.print("Packet received counter:");
-
-  Serial.print("Packet missed received queries counter:");
-  Serial.println("something");
-
-  printf("--------------------------\n\r");
-}
-/*END DEBUG*/

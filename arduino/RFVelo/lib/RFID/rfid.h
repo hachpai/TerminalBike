@@ -11,10 +11,11 @@ Released into the public domain.
 class Rfid
 {
 public:
-  Rfid(int pin_in,int pin_out);
+  Rfid(int pin);
   bool serialReadLine(String &dest);
   bool RFIDRead(byte *rFIDCode);
-  String byteArrayToString(byte *byteArray, int byteArraySize);
+  void printHexRFID(byte *byteArray, int byteArraySize);
+  //String byteArrayToString(byte *byteArray, int byteArraySize);
 private:
   SoftwareSerial RFIDSerial;
 };

@@ -1,4 +1,3 @@
-#include <Arduino.h>
 #include <SPI.h>
 #include "nRF24L01.h" //for nrf docs http://nrqm.ca/nrf24l01/
 #include "RF24.h"
@@ -56,7 +55,6 @@ class RFCore
 		void checkRadioNoIRQ();
     bool sendPacket(uint8_t *packet);
     bool getPacket(unsigned char *packet);
-
     void powerDownRadio();
     void powerUpRadio();
 

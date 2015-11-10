@@ -5,8 +5,6 @@
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License
  version 2 as published by the Free Software Foundation.
-
- Added Arduino Due support from https://github.com/mcrosson/
  */
  
  /* spaniakos <spaniakos@gmail.com>
@@ -22,72 +20,47 @@
   //#define MINIMAL
   //#define SPI_UART  // Requires library from https://github.com/TMRh20/Sketches/tree/master/SPI_UART
   //#define SOFTSPI   // Requires library from https://github.com/greiman/DigitalIO
+  
   /**********************/
   #define rf24_max(a,b) (a>b?a:b)
   #define rf24_min(a,b) (a<b?a:b)
-  
-#if ( ( defined (__linux) || defined (linux) ) && defined( __arm__ ) || defined(LITTLEWIRE) )
-  
-  #if defined(__arm__) && defined(linux)
 
-  #define RF24_LINUX
+  #if defined SPI_HAS_TRANSACTION && !defined SPI_UART && !defined SOFTSPI
+    #define RF24_SPI_TRANSACTIONS
   #endif
   
-  #include <stdint.h>
-  #include <stdio.h>
-  #include <time.h>
-  #include <string.h>
-  #include <sys/time.h>
-  #include <stddef.h>
-  #ifdef __arm__
-    #include "RPi/bcm2835.h"
-  #endif
+//Generic Linux/ARM and //http://iotdk.intel.com/docs/master/mraa/
+#if ( defined (__linux) || defined (LINUX) ) && defined( __arm__ ) || defined(MRAA) // BeagleBone Black running GNU/Linux or any other ARM-based linux device
 
-  // Additional fixes for LittleWire
-  #if defined(LITTLEWIRE)
-    #include <LittleWireSPI/LittleWireSPI.h>
-    #include <LittleWireSPI/avr_fixes.h>
-    extern LittleWireSPI _SPI;
-  #endif
+  // The Makefile checks for bcm2835 (RPi) and copies the correct includes.h file to /utility/includes.h (Default is spidev config)
+  // This behavior can be overridden by calling 'make RF24_SPIDEV=1' or 'make RF24_MRAA=1'
+  // The includes.h file defines either RF24_RPi, MRAA or RF24_BBB and includes the correct RF24_arch_config.h file
+  #include "utility/includes.h"
 
-  // GCC a Arduino Missing
-  #define _BV(x) (1<<(x))
-  #define pgm_read_word(p) (*(p))
-  #define pgm_read_byte(p) (*(p))
+//ATTiny  
+#elif defined(__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__) || defined(__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
   
-  //typedef uint16_t prog_uint16_t;
-  #define PSTR(x) (x)
-  #define printf_P printf
-  #define strlen_P strlen
-  #define PROGMEM
-  #define PRIPSTR "%s"
+  #define RF24_TINY
+  #include "utility/ATTiny/RF24_arch_config.h"
 
-  #ifdef SERIAL_DEBUG
-	#define IF_SERIAL_DEBUG(x) ({x;})
-  #else
-	#define IF_SERIAL_DEBUG(x)
-	#if defined(RF24_TINY)
-	  #define printf_P(...)
-    #endif
-  #endif
-
-#else //Everything else
-
-  #if ARDUINO < 100
-	#include <WProgram.h>
-  #else
-	#include <Arduino.h>
-  #endif
-
-  #include <stddef.h>
+//LittleWire  
+#elif defined(LITTLEWIRE)
   
- 
-  // Define _BV for non-Arduino platforms and for Arduino DUE
+  #include "utility/LittleWire/RF24_arch_config.h"
+
+//Teensy  
+#elif defined (TEENSYDUINO)
+
+  #include "utility/Teensy/RF24_arch_config.h"  
+//Everything else
+#else 
+
+  #include <Arduino.h>
+  
+  // RF modules support 10 Mhz SPI bus speed
+  const uint32_t RF_SPI_SPEED = 10000000;  
+
 #if defined (ARDUINO) && !defined (__arm__) && !defined (__ARDUINO_X86__)
-	#if defined(__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__) || defined(__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
-		#define RF24_TINY
-		#define _SPI SPI
-	#else
       #if defined SPI_UART
 		#include <SPI_UART.h>
 		#define _SPI uspi
@@ -104,30 +77,27 @@
 		#include <SPI.h>
 		#define _SPI SPI
 	  #endif
-	#endif
 #else
+  // Define _BV for non-Arduino platforms and for Arduino DUE
   #include <stdint.h>
   #include <stdio.h>
   #include <string.h>
 
 
- #if defined(__arm__) || defined (CORE_TEENSY) || defined (__ARDUINO_X86__)
+ #if defined(__arm__) || defined (__ARDUINO_X86__)
    #include <SPI.h>
  #endif
 
- #if !defined(CORE_TEENSY)	
-   #define _BV(x) (1<<(x))
-   #if !defined(__arm__) && !defined (__ARDUINO_X86__)
-     extern HardwareSPI SPI;
-   #endif
- #else
-    #define printf Serial.printf
+ 
+ #define _BV(x) (1<<(x))
+ #if !defined(__arm__) && !defined (__ARDUINO_X86__)
+   extern HardwareSPI SPI;
  #endif
+
 
   #define _SPI SPI
 #endif
 
-  
   #ifdef SERIAL_DEBUG
 	#define IF_SERIAL_DEBUG(x) ({x;})
   #else
@@ -142,90 +112,45 @@
 	#define _BV(bit) (1<<(bit))
 #endif
   
-// Avoid spurious warnings
-// Arduino DUE is arm and uses traditional PROGMEM constructs
-#if 1
-#if ! defined( NATIVE ) && defined( ARDUINO ) && ! defined(__arm__)  && ! defined( CORE_TEENSY3 )
-#undef PROGMEM
-#define PROGMEM __attribute__(( section(".progmem.data") ))
-#undef PSTR
-#define PSTR(s) (__extension__({static const char __c[] PROGMEM = (s); &__c[0];}))
-#endif
-#endif
-
 // Progmem is Arduino-specific
 // Arduino DUE is arm and does not include avr/pgmspace
-#if defined(ARDUINO) && ! defined(__arm__) && !defined (__ARDUINO_X86__)
+#if defined (ARDUINO_ARCH_ESP8266)
+  #include <pgmspace.h>  
+  
+  typedef uint16_t prog_uint16_t;
+  #define PSTR(x) (x)
+  #define printf_P printf
+  #define strlen_P strlen  
+  #define PROGMEM
+  #define pgm_read_byte(addr) (*(const unsigned char *)(addr))
+  #define pgm_read_word(p) (*(p))
+  #define PRIPSTR "%s"
+  
+#elif defined(ARDUINO) && ! defined(__arm__) && !defined (__ARDUINO_X86__)
 	#include <avr/pgmspace.h>
 	#define PRIPSTR "%S"
 #else
-#if ! defined(ARDUINO) // This doesn't work on Arduino DUE
+  #if ! defined(ARDUINO) // This doesn't work on Arduino DUE
 	typedef char const char;
-#else // Fill in pgm_read_byte that is used, but missing from DUE
+  #else // Fill in pgm_read_byte that is used, but missing from DUE
 	#define pgm_read_byte(addr) (*(const unsigned char *)(addr))
+  #endif
+
+
+  typedef uint16_t prog_uint16_t;
+  #define PSTR(x) (x)
+  #define printf_P printf
+  #define strlen_P strlen
+  #define PROGMEM
+  #define pgm_read_word(p) (*(p))
+
+  #define PRIPSTR "%s"
+
 #endif
 
-#if !defined ( CORE_TEENSY )
-	typedef uint16_t prog_uint16_t;
-	#define PSTR(x) (x)
-	#define printf_P printf
-	#define strlen_P strlen
-	#define PROGMEM
-	#define pgm_read_word(p) (*(p))
 #endif
 
-	#define PRIPSTR "%s"
-
-#endif
-
-#endif //Defined Linux 
 
 
-// ATTiny support code is from https://github.com/jscrane/RF24
-
-#if defined(RF24_TINY)
-#include <stdio.h>
-#include <Arduino.h>
-#include <avr/pgmspace.h>
-
-#define SPI_CLOCK_DIV4 0x00
-#define SPI_CLOCK_DIV16 0x01
-#define SPI_CLOCK_DIV64 0x02
-#define SPI_CLOCK_DIV128 0x03
-#define SPI_CLOCK_DIV2 0x04
-#define SPI_CLOCK_DIV8 0x05
-#define SPI_CLOCK_DIV32 0x06
-//#define SPI_CLOCK_DIV64 0x07
-
-#define SPI_MODE0 0x00
-#define SPI_MODE1 0x04
-#define SPI_MODE2 0x08
-#define SPI_MODE3 0x0C
-
-#define SPI_MODE_MASK 0x0C  // CPOL = bit 3, CPHA = bit 2 on SPCR
-#define SPI_CLOCK_MASK 0x03  // SPR1 = bit 1, SPR0 = bit 0 on SPCR
-#define SPI_2XCLOCK_MASK 0x01  // SPI2X = bit 0 on SPSR
-
-
-
-class SPIClass {
-public:
-  static byte transfer(byte _data);
-
-  // SPI Configuration methods
-
-  inline static void attachInterrupt();
-  inline static void detachInterrupt(); // Default
-
-  static void begin(); // Default
-  static void end();
-
-  static void setBitOrder(uint8_t);
-  static void setDataMode(uint8_t);
-  static void setClockDivider(uint8_t);
-};
-extern SPIClass SPI;
-
-#endif //ATTiny
 #endif // __RF24_CONFIG_H__
 

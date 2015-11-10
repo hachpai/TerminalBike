@@ -1,46 +1,58 @@
 #include "printf.h"
 #include "RFCore.h"
-#include "Rfid.h"
 #include <Servo.h>
-#include "Adafruit_NeoPixel.h"
 #include <avr/sleep.h>
 #include <avr/power.h>
+#include "Rfid.h"
+#include "Adafruit_NeoPixel.h"
 
-char test_mode='0';
-/******************************/
-/*     PINs CONFIGURATION     */
-/******************************/
-/* boutons */
+/************************/
+/** PINs configuration **/
+/************************/
+/* RF
+black module config: http://www.seeedstudio.com/document/pics/Interface.jpg
+1 - GND       |8 7 |
+2 - VCC       |6 5 |
+3 - CE        |4 3 |
+4 - CSN       |2[1]|
+5 - SCK
+6 - MOSI
+7 - MISO
+8 - IRQ */
+
+/* pour RF24 radio(9,10) as in RFCore (http://tmrh20.github.io/RF24/ (avec 7 -> 9 et 8 -> 10))
+GND -> GND
+VCC -> 3V3
+CE  -> 9
+CSN ->10
+MOSI ->11
+MISO ->12
+SCK ->13
+IRQ -> 2
+*/
+/* Buttons */
 const int BUTTON_PIN1 = 14; //A0
 const int BUTTON_PIN2 = 15; //A1
 /* Locker */
-const int MOTOR_PIN_CONTROL = 6; //A4
-const int MOTOR_ACTIVATE = 7; //A2;
-/*RF*/
-const int RF_PIN_CE=9;
-const int RF_PIN_CSN=10;
+const int MOTOR_PIN1 = A4; //A4
+const int MOTOR_PIN2 = A3; //A3
+const int MOTOR_ENABLE = 5; //A2
+const int BUTTON_MOTOR_STOP_OPEN = 3;
+const int BUTTON_MOTOR_STOP_CLOSE = 4;
+
 /* RFID */
 const int RFID_ACTIVATE = 3; // OUTPUT 1 TO ACTIVATE THE LED
-const int RFID_DATA = 8;
+
+const int RFID_IN = 8; //final version will use pin 0 (serial)
+const int RFID_OUT = 8;//final version will use pin 1 (without serial.begin, it makes them unusable)
+
 /* LED */
-const int LED_PIN = 5; // NeoPixel
+const int LED_PIN = 6; // NeoPixel
 
-//RF Variables
-
-RFCore * rf_core;
-
-
-//RFID
-Rfid rfid(RFID_DATA);
-byte rfid_data[6] = {0,0,0,0,0,0};
-byte client_rfid[6] = {34,35,36,37,38,39};
-
-//servo
-Servo locker_motor;  // create servo object to control a servo
-
-
-/*LED*/
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(1, LED_PIN, NEO_KHZ800);
+/************************/
+/** ARBITRARY CONSTANTS**/
+/************************/
+/*LED COLOURS*/
 const int COLOUR_OFF=0;
 const int COLOUR_RED=1;
 const int COLOUR_YELLOW=2;
@@ -48,16 +60,33 @@ const int COLOUR_ORANGE=3;
 const int COLOUR_GREEN=4;
 const int COLOUR_BLUE=5;
 const int COLOUR_WHITE=6;
+//MOTOR
 
-/*buttons*/
-const int DEBOUNCE_DELAY =300;
+const int RFID_TIMEOUT = 10000; //10 sec to put the rfid card
+const int DEBOUNCE_DELAY =200;
+const int USER_CODE_TIMEOUT = 10000; //10 sec to type the code
+const int USER_CODE_LENGTH = 4;
+const int MAX_ATTEMPT_TO_SEND_DATA = 3; // number attempts to send data to the born/terminal
+const int DELAY_ATTEMPT_TO_SEND_DATA = 300; // 0.3 sec to wait between 2 attemps of sending data to the born/terminal
+const int MOTOR_MOVEMENT_DELAY = 500;
+const int MOTOR_MOVEMENT_TIMEOUT = 250;
+
+const int MOTOR_SPEED = 200; //100
+/***********************************/
+
+
+bool terminal_in_range = false;
+
+Rfid rfid(RFID_IN,RFID_OUT);
+RFCore * rf_core;
+
+byte client_rfid[6] = {34,35,36,37,38,39};
+
+unsigned char user_code[6]= {0,0,0,0,0,0}; //All char array about to be send must be the size of one packet
+
 byte user_code_byte = 0x0;
 
-const int RFID_TIMEOUT = 5000; //10 sec to put the rfid card
-const int USER_CODE_TIMEOUT = 5000; //10 sec to type the code
-const int USER_CODE_LENGTH = 4;
-unsigned char user_code[6]= {0,0,0,0,0,0}; //All char array about to be send must be the size of one packet
-unsigned char correct_user_code[6]= {0,1,0,1,0,0}; //All char array about to be send must be the size of one packet
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(1, LED_PIN, NEO_KHZ800);
 
 void setup(void) {
 	Serial.begin(115200);
@@ -66,12 +95,15 @@ void setup(void) {
 
 	printf_begin();
 
-	pinMode(BUTTON_PIN1, INPUT_PULLUP);
-	pinMode(BUTTON_PIN2, INPUT_PULLUP);
+	pinMode(BUTTON_PIN1, INPUT);
+	pinMode(BUTTON_PIN2, INPUT);
 
 	pinMode(RFID_ACTIVATE, OUTPUT);
-	pinMode(MOTOR_ACTIVATE, OUTPUT);
-	locker_motor.attach(MOTOR_PIN_CONTROL);  // attaches the servo on pin 9 to the servo object
+
+	pinMode(MOTOR_PIN1, OUTPUT);
+	pinMode(MOTOR_PIN2, OUTPUT);
+	pinMode(MOTOR_ENABLE, OUTPUT);
+
 	int BIKE_ID = 8;//will read EEPROM after
 	rf_core = new RFCore(BIKE_ID, false);
 	pixels.begin();
@@ -79,63 +111,15 @@ void setup(void) {
 	switchButtonsInterrupts(false);
 	disableRFID();
 }
-int bike_state=0;
-const int BIKE_IN_TERMINAL=0;
-const int BIKE_AWAY=1;
-const int BIKE_AWAY_LOCKED=3;
 
-bool disfunction_signalized=false;
 void loop() {
-	readInitialButtonStates();
-	printf("STATE:%d\n\r",bike_state);
+
 	//sleepNow();
-	switch(bike_state){
-		case BIKE_IN_TERMINAL:
-		if(disfunction_signalized){
-			blinkLed(5,COLOUR_RED,200);
-			blinkLed(2,COLOUR_GREEN,500);
-			disfunction_signalized=false;
-		}
-		else{
-			withdrawBike();
-		}
-		break;
-		case BIKE_AWAY:
-		returnBike();
-		break;
-		case BIKE_AWAY_LOCKED:
-		unlockTemporyStop();
-		break;
-		default:
-		switchLed(COLOUR_OFF);
-		break;
-	}
-	switchLed(COLOUR_OFF);
-	printf("STATE:%d\n\r",bike_state);
-	printf("Go to sleep\n\r");
-	sleepNow();
-}
-//this method let us define user code to signalize a disfunction
-void readInitialButtonStates(){
-	delay(400);
-	if(digitalRead(BUTTON_PIN1) == LOW && digitalRead(BUTTON_PIN2) == LOW && bike_state==BIKE_IN_TERMINAL){
-		disfunction_signalized=true;
-	}
-	else if(digitalRead(BUTTON_PIN1) == LOW && bike_state==BIKE_AWAY){
-		bike_state=BIKE_AWAY_LOCKED;
-	}
-}
-void returnBike(){
-	bike_state=BIKE_IN_TERMINAL;
-	switchLed(COLOUR_GREEN);
-	delay(1000);
-}
-void withdrawBike(){
-	//bool terminal_in_range = rf_core->rangeTest();
+	printf("AWAKE!\n\r");
+
+	terminal_in_range = rf_core->rangeTest();
 	//rf_core->debug();
-//bool terminal_in_range = true;
-	switchLed(COLOUR_YELLOW);
-  bool terminal_in_range = rf_core->rangeTest();
+
 	if(terminal_in_range) {
 		printf("Terminal in range!\n\r");
 		switchLed(COLOUR_WHITE);
@@ -146,7 +130,6 @@ void withdrawBike(){
 		if (!rfid_user_received) {
 			printf("No RFID given\n\r");
 			switchLed(COLOUR_RED);
-			delay(2000);
 		} else {
 			printf("Get RFID : ");
 			for(int i =0; i<6;i++){
@@ -157,8 +140,6 @@ void withdrawBike(){
 
 			if(!getUserCode()) {
 				printf("No user code given\n\r");
-				switchLed(COLOUR_RED);
-				delay(2000);
 			} else {
 				printf("User code given : ");
 
@@ -166,18 +147,17 @@ void withdrawBike(){
 					Serial.print(user_code[i]);
 				}
 				printf("\n\r");
-				printf("%i\n\r", user_code_byte);
 				switchLed(COLOUR_YELLOW);
+
+				printf("%i\n\r", user_code_byte);
+
 				if(canWithdraw()) {
 					printf("Ok withdraw\n\r");
 					switchLed(COLOUR_GREEN);
-					enableServoMotor();
 					openLock();
 					delay(3000);
 					closeLock();
-					disableServoMotor();
 					delay(500);
-					bike_state=BIKE_AWAY;
 				} else {
 					printf("No withdraw\n\r");
 					switchLed(COLOUR_RED);
@@ -186,49 +166,12 @@ void withdrawBike(){
 			}
 		}
 	}
-}
-void unlockTemporyStop(){
-	switchLed(COLOUR_ORANGE);
-	delay(1000);
-	switchLed(COLOUR_BLUE);
-	if(!getUserCode()) {
-		printf("No user code given\n\r");
-		switchLed(COLOUR_RED);
-	} else {
-		printf("User code given : ");
 
-		for(int i =0; i<USER_CODE_LENGTH;i++){
-			Serial.print(user_code[i]);
-		}
-		printf("\n\r");
-
-		printf("%i\n\r", user_code_byte);
-		//if(canWithdraw()) {
-		if(verifyUserCode()) {
-			printf("Ok withdraw\n\r");
-			switchLed(COLOUR_GREEN);
-			enableServoMotor();
-			openLock();
-			delay(3000);
-			closeLock();
-			disableServoMotor();
-			delay(500);
-			bike_state=BIKE_AWAY;
-		} else {
-			printf("No withdraw\n\r");
-			switchLed(COLOUR_RED);
-			delay(3000);
-		}
-	}
+	switchLed(COLOUR_OFF);
+	printf("Go to sleep\n\r");
+	sleepNow();
 }
-bool verifyUserCode(){
-	bool correct=true;
-	for(int i =0; i<USER_CODE_LENGTH;i++){
-		correct &= correct_user_code[i]==user_code[i];
 
-	}
-	return correct;
-}
 void switchLed(int color) {
 	int r,g,b;
 	r=g=b=0;
@@ -262,14 +205,6 @@ void switchLed(int color) {
 	pixels.setPixelColor(0, pixels.Color(r,g,b));
 	pixels.show();
 }
-void blinkLed(int number_of_blink,int color,int timing){
-	for(int i=0;i<number_of_blink;i++){
-		switchLed(color);
-		delay(timing);
-		switchLed(COLOUR_OFF);
-		delay(timing);
-	}
-}
 
 /**
 * Try to read the RFID Data. There is a timeout given by RFID_TIMEOUT
@@ -298,26 +233,54 @@ void disableRFID() {
 	digitalWrite(RFID_ACTIVATE, LOW);
 }
 
-void enableServoMotor(){
-		digitalWrite(MOTOR_ACTIVATE, HIGH);
-}
-void disableServoMotor(){
-		digitalWrite(MOTOR_ACTIVATE, LOW);
-}
-
 /********************/
 /* LOCKER FUNCTIONS  */
 /********************/
 
 void actionLock(bool open) {
-	if(open){
-		locker_motor.write(5);              // tell servo to go to position in variable 'pos'
-		delay(1000);
+	int actual_time= millis();
+	int initial_time = actual_time;
+	bool button_pressed = false;
+
+	if(open) {
+		Serial.print("openLock - \n\r");
+	} else {
+		Serial.print("closeLock - \n\r");
 	}
-	else{
-		locker_motor.write(90);              // tell servo to go to position in variable 'pos'
-		delay(1000);
+
+	analogWrite(MOTOR_ENABLE, MOTOR_SPEED);
+	//digitalWrite(MOTOR_ENABLE,HIGH);
+	//Serial.print("%i - \n\r", MOTOR_SPEED);
+	delay(20);
+
+	if(open) {
+		digitalWrite(MOTOR_PIN1, HIGH); // set pin 2 on L293D low
+		digitalWrite(MOTOR_PIN2, LOW);
+	} else {
+		digitalWrite(MOTOR_PIN1, LOW); // set pin 2 on L293D low
+		digitalWrite(MOTOR_PIN2, HIGH);
 	}
+
+	while((actual_time-initial_time) < MOTOR_MOVEMENT_TIMEOUT && ! button_pressed) {
+		actual_time= millis();
+
+		int button_open = digitalRead(BUTTON_MOTOR_STOP_OPEN);
+		int button_close = digitalRead(BUTTON_MOTOR_STOP_CLOSE);
+
+		if(button_open== HIGH && open) {
+			Serial.print("open pressed - \n\r");
+			button_pressed = true;
+		}
+
+		if(button_close == HIGH && (!open)) {
+			Serial.print("close pressed - \n\r");
+			button_pressed = true;
+		}
+	}
+
+	Serial.print("fin \n\r");
+
+	analogWrite(MOTOR_ENABLE, LOW);
 }
 
 
@@ -349,28 +312,26 @@ boolean getUserCode(){
 		actual_time = millis();
 		button_state1 = digitalRead(BUTTON_PIN1);
 		button_state2 = digitalRead(BUTTON_PIN2);
-		switchLed(COLOUR_BLUE);
-		if(button_state1== HIGH && button_state2 == HIGH){ // if both buttons are released
+
+		if(button_state1== LOW && button_state2 == LOW){ // if both buttons are released
 			buttons_released = true;
-			//digitalWrite(BUTTON_PIN1,LOW);
-			//digitalWrite(BUTTON_PIN2,LOW);
+			digitalWrite(BUTTON_PIN1,LOW);
 		}
 		//check if user has released the buttons and if only one is pressed
-		else if(buttons_released && (button_state1== LOW ^ button_state2 == LOW))
+		else if(buttons_released && (button_state1== HIGH ^ button_state2 == HIGH))
 		{
 			// verify which button is pressed and if not both are pressed
-			if (button_state1 == LOW && button_state2 == HIGH) {
-				printf("B1!\n\r");
+			if (button_state1 == HIGH && button_state2 == LOW) {
 				user_code[index_key] = 0;
 				index_key++;
-				switchLed(COLOUR_OFF);
+
 				user_code_byte = user_code_byte | 0X0;
 				if(index_key != USER_CODE_LENGTH) {
 					user_code_byte = user_code_byte << 1;
 				}
+				switchLed(COLOUR_BLUE);
 			}
-			else if(button_state2 == LOW && button_state1 == HIGH){
-				printf("B2!\n\r");
+			else if(button_state2 == HIGH && button_state1 == LOW){
 				switchLed(COLOUR_OFF);
 				user_code[index_key] = 1;
 				index_key++;
@@ -379,8 +340,10 @@ boolean getUserCode(){
 				if(index_key != USER_CODE_LENGTH) {
 					user_code_byte = user_code_byte << 1;
 				}
+
+
+				switchLed(COLOUR_BLUE);
 			}
-      initial_time=millis(); // this instruction avoid the timeout while user is entering code
 			buttons_released = false;
 			delay(DEBOUNCE_DELAY); //to avoid contact bounce
 		}
@@ -391,34 +354,27 @@ boolean getUserCode(){
 boolean canWithdraw() {
 	if(rf_core->handShake()) {
 		printf("Success handshake!\n\r");
-    printf("Sending RFID:");
-    rfid.printHexRFID(client_rfid,6);
-    printf(" - and user code: %d",user_code_byte);
-    printf("\n\r");
+
 		uint8_t user_datas[8];
-		for(int i=0; i<6;i++){
+		for(int i =0; i<6;i++){
 			user_datas[i]=client_rfid[i];
 		}
 		user_datas[6]= user_code_byte;
 		user_datas[7]= 0;
 		//user_datas[7]= '\O';
-    uint8_t server_response[8];
-    bool received_server_response=false;
-		while(!received_server_response){
-		  rf_core->sendPacket(user_datas);
-      received_server_response=rf_core->getPacket(server_response);
+
+		while(true){
+			rf_core->sendPacket(user_datas);
+			delay(200);
 		}
-    printf("server response:");
-    for(int i=0;i<8;i++){
-      printf("%c ",server_response[i]);
-    }
-    printf("\n\r");
+
 		//int response = rf_core->withdrawPermission(user_code_byte, &client_rfid);
-		// int response = 0;
-		// printf("response : %i\n\r", response);
+		int response = 0;
+		printf("response : %i\n\r", response);
 
 		rf_core->closeSession();
-		return true;
+
+		return response == 1;
 	}
 	return false;
 }

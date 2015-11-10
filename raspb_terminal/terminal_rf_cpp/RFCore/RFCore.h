@@ -1,6 +1,7 @@
-#include <SPI.h>
-#include "nRF24L01.h" //for nrf docs http://nrqm.ca/nrf24l01/
-#include "RF24.h"
+
+//#include "nRF24L01.h" //for nrf docs http://nrqm.ca/nrf24l01/
+//#include "RF24.h"
+#include <RF24/RF24.h>
 
 /*-----( Declare Constants and Pin Numbers )-----*/
 #define CE_PIN   9
@@ -54,7 +55,10 @@ class RFCore
 		void closeSession(); // stop the hand shake (ie. the bike says it has finish to communicate withe the born/terminal)
 		void checkRadioNoIRQ();
     bool sendPacket(uint8_t *packet);
-    bool getPacket(unsigned char *packet);
+    //bool waitPacket(unsigned char *packet);
+		bool inSession();
+		int getBikeId();
+		void getSessionData(uint8_t *buf);
     void powerDownRadio();
     void powerUpRadio();
 

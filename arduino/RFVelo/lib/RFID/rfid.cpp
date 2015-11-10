@@ -5,12 +5,11 @@
 #include "rfid.h"
 
 //http://stackoverflow.com/questions/13169714/creating-a-library-for-an-arduino
-Rfid::Rfid(int pin_in,int pin_out)
-	: RFIDSerial(pin_in,pin_out)
+Rfid::Rfid(int pin)
+	: RFIDSerial(pin,pin)
 {
-	RFIDSerial = SoftwareSerial(pin_in,pin_out);
+	RFIDSerial = SoftwareSerial(pin,pin);
 	RFIDSerial.begin(9600);
-
 }
 
 // rFIDRead ->
@@ -66,14 +65,17 @@ bool Rfid::RFIDRead(byte *rFIDCode) {
 // <- fin RFIDRead
 
 // byteArrayToString ->
-String Rfid::byteArrayToString(byte *byteArray, int byteArraySize) {
+void Rfid::printHexRFID(byte *byteArray, int byteArraySize) {
   int i;
   String ret = "";
   for (i=0; i<byteArraySize; i++) {
-    if(byteArray[i] < 16) ret += "0";
-    ret += String(byteArray[i], HEX);
-    if (i < 4) ret += " ";
+		if(byteArray[i] < 16) printf("0");
+		printf("%x",byteArray[i]);
+		if (i < 5) printf(":");
+    // if(byteArray[i] < 16) ret += "0";
+    // ret += String(byteArray[i], HEX);
+    // if (i < 4) ret += " ";
   }
-  return ret;
+  //return ret;
 }
 // <- fin byteArrayToString
