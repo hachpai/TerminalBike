@@ -16,9 +16,9 @@ const int TIMEOUT_DELAY=3000;
 
 bool is_terminal;
 
-char success_code[]  = "OK";
+char success_code[]  = "H1";
 char success_logout_code[]  = "OKLO";
-char busy_code[] = "KO";
+char busy_code[] = "H0";
 
 unsigned int bike_id;
 void printPipe();
@@ -131,17 +131,16 @@ bool RFCore::handShake(){
   printf("\n\r");
   while(radio.available())
   {
-    char data_received[3];
     radio.read( &data_received, sizeof(data_received));
     printf("Got response in HANDSHAKE %s\n\r",data_received);
-    if(strcmp(data_received,success_code)==0)
-    {
-      in_session=true;
-      return true;
-    }
-
+    delay(50);
   }
-
+  if(strcmp(data_received,success_code)==0)
+  {
+    in_session=true;
+    return true;
+  }
+  return false;
 }
 
 
@@ -177,13 +176,20 @@ bool RFCore::rangeTest()
 
     }
     printf("\n\r");
-    while(radio.available())
+    if(radio.available())
     {
       char response[3];
 
       radio.read( &response, sizeof(response));
       if(strcmp(response,success_code)==0 || strcmp(response,busy_code)==0){//terminal reply with a busy or free code, range passed
         printf("Well received in range test:%s\n\r",response);
+        while(radio.available())
+        {
+          char data_received[3];
+          radio.read( &data_received, sizeof(data_received));
+          printf("Got response in range TEST %s\n\r",data_received);
+          delay(50);
+        }
         return true;
       }
 

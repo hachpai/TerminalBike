@@ -20,7 +20,7 @@ int no_w_bytes,no_r_bytes;
 int server_sockfd,io_sockfd;
 
 bool write_socket(void *bufw, int datasize);
-bool read_socket(void *bufr);
+bool read_socket(void *bufr,int datasize);
 
 int main(int argc, char** argv){
 
@@ -49,34 +49,48 @@ int main(int argc, char** argv){
   }
   /*END SOCKET CONF*/
   //blocking operation, waiting for connections
-  printf("Waiting for node.js...\n");
+  printf("Waiting for node.js...\n\r");
   if ((io_sockfd = accept(server_sockfd, NULL, NULL)) == -1) {
     perror("accept error");
   }
   printf("Node.js connected.\n");
   rf_core = new RFCore(0, true);
   rf_core->debug();
+  bool server_already_responded=false;
+  unsigned char server_response[8];
   while(true){
-    rf_core->checkRadioNoIRQ();
 
-    if(rf_core->inSession()){
+    rf_core->checkRadioNoIRQ();
+    if(!rf_core->inSession()){
+      server_already_responded=false;
+    }
+    if(rf_core->inSession() && rf_core->dataSessionAvailable()){
+      printf("In session with bike %d\n\r", rf_core->getBikeId());
       unsigned char received_data[8];
+      printf("before getsession.\n\r");
+
       rf_core->getSessionData(received_data);
-      received_data[7]=rf_core->getBikeId();
-      // printf("received_data=");
-      // for(int i=0; i<7;i++){
-      //   printf("%u |",received_data[i]);
-      // }
-      //printf("\n");
-      write_socket(received_data,8);
-      unsigned char server_response[8];
-      delay(50);
-      read_socket(server_response);
-      printf("Server response:%c %c",server_response[0],server_response[1]);
-      int bike_id = std::atoi(( char * ) server_response[2]);
-      printf(" id:%d",bike_id);
+      printf("received_data=");
+      for(int i=0; i<8;i++){
+        printf("%u |",received_data[i]);
+      }
       printf("\n\r");
+
+      //let the time to nodejs to contact the server
+
+
+      if(!server_already_responded){
+        write_socket(received_data,8);
+        delay(200); //wait nodejs and server response
+        read_socket(server_response,8);
+
+        printf("Server response:%c%c",server_response[0],server_response[1]);
+        server_response[2]=rf_core->getBikeId();
+        printf("\n\r");
+      }
+      // ROTTEN LINE! int bike_id = std::atoi(( char * ) server_response[2]);
       rf_core->sendPacket(server_response);
+      printf("sending to bike:%c%c%d\n\r",server_response[0],server_response[1],server_response[2]);
       // if(strcmp(server_response,"OK") ==0){
       //
       // }
@@ -104,8 +118,8 @@ bool write_socket(void *bufw, int data_size){
   }
   else {return true;}
 }
-bool read_socket(void *bufr){
-  if((no_r_bytes=read(io_sockfd,bufr,sizeof(bufr))) > 0) {
+bool read_socket(void *bufr, int data_size){
+  if((no_r_bytes=read(io_sockfd,bufr,data_size)) > 0) {
     //printf("read %u bytes: %.*s\n", no_r_bytes, no_r_bytes, buf);
     return true;
   }
@@ -117,7 +131,6 @@ bool read_socket(void *bufr){
   else if (no_r_bytes == 0) {
     printf("EOF\n");
     return false;
-    close(io_sockfd);
   }
   return false;
 }

@@ -57,8 +57,10 @@ class RFCore
     bool sendPacket(uint8_t *packet);
     //bool waitPacket(unsigned char *packet);
 		bool inSession();
+		bool dataSessionAvailable();
 		int getBikeId();
 		void getSessionData(uint8_t *buf);
+
     void powerDownRadio();
     void powerUpRadio();
 

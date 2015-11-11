@@ -1,6 +1,7 @@
 #include "RFCore.h"
 
 volatile uint8_t in_session=false;
+volatile uint8_t data_session_available=false;
 volatile int irq1,irq2,irq3;
 
 volatile int session_counter=0;
@@ -17,9 +18,9 @@ const int TIMEOUT_DELAY=3000;
 
 bool is_terminal;
 
-char success_code[]  = "OK";
+char success_code[]  = "H1";
 char success_logout_code[]  = "OKLO";
-char busy_code[] = "KO";
+char busy_code[] = "H0";
 
 uint8_t session_data[8]; //8 bytes = payload of uint64_t
 
@@ -233,11 +234,22 @@ void RFCore::printSessionCounter()
 bool RFCore::inSession(){
   return in_session;
 }
+bool RFCore::dataSessionAvailable(){
+  if(data_session_available){
+    data_session_available=false;
+    return true;
+  }
+  else return false;
+}
+
 int RFCore::getBikeId(){
   return bike_id;
 }
+
+/*Take a buffer and store session data (7 bytes) 5 bytes RFID, one byte user code, one byte bikeid
+*/
 void RFCore::getSessionData(uint8_t *buf){
-  for(int i=0; i<7;i++){
+  for(int i=0; i<8;i++){
     buf[i]=session_data[i];
   }
 }
@@ -277,16 +289,18 @@ void RFCore::checkRadioNoIRQ(void)
         radio.openWritingPipe(start_bike_pipe+_id);
         //IMPORTANT: here we accept handshake if the bike is new and we're out of session
         // OR: We're in session but the same bike ask again.
+        printf("in session:%d / bike id:%d / id received:%d \n\r",in_session,bike_id,_id);
         if(in_session  && !(_id == bike_id)){ //terminal is busy and a NEW bike is asking for a session
+          printf("terminal send busy code for handshake.\n\r");
           radio.write(&busy_code,sizeof(busy_code)); //send the bike that the terminal is busy
         }
         else{ //terminal accept a handshake, or the bike didn't receive the confirmation
+        printf("terminal send success code for handshake.\n\r");
         radio.write(&success_code,sizeof(success_code));
         bike_id = _id;
         in_session=true;
       }
       radio.startListening();
-
     }
     break;
     case 3: //session pipe
@@ -300,6 +314,7 @@ void RFCore::checkRadioNoIRQ(void)
     if(data[0]=='L' && data[1]=='O'){//for log out code in session
       printf("Received %s,  ACK FOR LO, SEND BACK %s ON PIPE %llu.\n\r",data,success_logout_code,start_bike_pipe+bike_id);
       in_session=false;
+      data_session_available=false;
       //erasing data
       for(int i=0; i<7;i++){
         session_data[i]=0;
@@ -310,8 +325,9 @@ void RFCore::checkRadioNoIRQ(void)
       radio.write(&success_logout_code,sizeof(success_logout_code)); //notice successful logout to bike
     }
     else{
+      data_session_available=true;
       printf("Received user code and rfid:");
-      for(int i=0; i<7;i++){
+      for(int i=0; i<8;i++){
         session_data[i]=data[i];
         printf("%u ",data[i]);
       }
