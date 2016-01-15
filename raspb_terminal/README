@@ -1,0 +1,2 @@
+sudo /home/pi/terminal_rf_cpp/terminal_RF
+node /home/pi/terminal_bike_nodejs/terminal_node.js

@@ -59,7 +59,7 @@ const int USER_CODE_LENGTH = 4;
 unsigned char user_code[6]= {0,0,0,0,0,0}; //All char array about to be send must be the size of one packet
 unsigned char correct_user_code[6]= {0,1,0,1,0,0}; //All char array about to be send must be the size of one packet
 
-int BIKE_ID = 1;//will read EEPROM after
+int BIKE_ID = 3;//will read EEPROM after
 
 void setup(void) {
   Serial.begin(115200);
@@ -218,8 +218,8 @@ void withdrawBike(){
           openLock();
           delay(3000);
           closeLock();
+          delay(1000);
           disableServoMotor();
-          delay(500);
           bike_state=BIKE_AWAY;
         } else {
           printf("No withdraw\n\r");
